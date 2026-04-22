@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.vite/
+.turbo/
+
+# Environment — NEVER commit secrets
+.env
+.env.*
+!.env.example
+
+# Claude Code runtime artifacts
+.claude/audit.log
+.claude/settings.local.json
+
+# DB
+*.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test coverage
+coverage/

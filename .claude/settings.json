@@ -1,0 +1,51 @@
+{
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "deny": [
+      "Read(.env*)",
+      "Bash(rm -rf*)",
+      "Bash(sudo*)",
+      "Bash(curl*)",
+      "Bash(git push --force*)",
+      "Edit(/etc/**)",
+      "Write(/etc/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "inp=$(cat); ts=$(date -u +%Y-%m-%dT%H:%M:%SZ); tool=$(printf '%s' \"$inp\" | jq -r '.tool_name // \"unknown\"' 2>/dev/null); detail=$(printf '%s' \"$inp\" | jq -r '(.tool_input.command // .tool_input.file_path // \"\") | .[0:120]' 2>/dev/null); printf '%s | [%s] %s\\n' \"$ts\" \"$tool\" \"$detail\" >> .claude/audit.log 2>/dev/null; exit 0",
+            "statusMessage": "Auditing...",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "inp=$(cat); fp=$(printf '%s' \"$inp\" | jq -r '.tool_input.file_path // \"\"' 2>/dev/null); case \"$fp\" in *.ts|*.tsx) printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"TypeScript modified: %s — remember to run pnpm typecheck before committing.\"}}' \"$fp\" ;; esac; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "todos=$(grep -rn --include='*.ts' --include='*.tsx' --include='*.md' 'TODO\\|FIXME\\|HACK' . 2>/dev/null | head -50); [ -n \"$todos\" ] && echo \"$todos\" | jq -Rs '{\"hookSpecificOutput\":{\"hookEventName\":\"PreCompact\",\"additionalContext\":\"Open TODOs/FIXMEs/HACKs to preserve:\\n\" + .}}' || true; exit 0",
+            "statusMessage": "Preserving TODOs..."
+          }
+        ]
+      }
+    ]
+  }
+}
