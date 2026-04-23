@@ -135,4 +135,11 @@ describe('runner (integration with fake-claude.mjs via node)', () => {
       expect(whitelisted.payload.tool).toBe('bash');
     }
   });
+
+  it('slow fake + low timeout → reason=timeout', async () => {
+    const h = runFake('slow', { timeoutMs: 500 });
+    await drain(h);
+    const res = await h.result;
+    expect(res.reason).toBe('timeout');
+  }, 15_000);
 });

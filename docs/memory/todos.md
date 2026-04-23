@@ -69,14 +69,14 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 
 ---
 
-## Fase 5 — Calidad y cierre MVP
+## Fase 5 — Calidad y cierre MVP *(completado 2026-04-23)*
 
-- [ ] Tests integración API: todos los endpoints del MVP con `fastify.inject()`
-- [ ] Tests runner: cobertura de cancelación, timeout, parse-error, redact
-- [ ] Tests frontend: páginas críticas con Testing Library
-- [ ] `pnpm lint` + `pnpm typecheck` en cero errores
-- [ ] Documentar en `decisions.md` cualquier decisión tomada durante la implementación
-- [ ] Actualizar `todos.md` al cerrar cada tarea significativa
+- [x] Tests integración API: todos los endpoints del MVP con `fastify.inject()` — 29 tests
+- [x] Tests runner: cobertura de cancelación, timeout, parse-error, redact — 40 tests
+- [x] Tests frontend: páginas críticas con Testing Library — 17 tests
+- [x] `pnpm lint` + `pnpm typecheck` en cero errores
+- [x] Documentar en `decisions.md` cualquier decisión tomada durante la implementación
+- [x] Actualizar `todos.md` al cerrar cada tarea significativa
 
 ---
 

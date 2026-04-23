@@ -249,3 +249,43 @@ Registro de decisiones no obvias del código. Formato por entrada:
 - Forzar versión de vite vía `pnpm.overrides`: introduce deuda.
 
 **Consecuencias**: las configs de build (`vite.config.ts`) y test (`vitest.config.ts`) no se typechequean con `tsc --noEmit`. Si se introduce un error de tipo ahí, se verá al correr `pnpm --filter @cac/web dev` o `test`. Aceptable: son archivos estáticos que casi no cambian.
+
+---
+
+## [2026-04-23] Mocks con estado compartido en tests API (no DB real en CI)
+
+**Contexto**: la spec de `backend.md` dice "DB de test: Postgres real (via Docker Compose `postgres-test`), no mocks. Mockear sólo lo que cruza proceso...". Para los tests de Fase 5 (29 escenarios HTTP) ejecutar contra postgres-test real era costoso: requiere docker-compose up, migraciones y seeding, y los tests se volverían flaky bajo CI sin Docker.
+
+**Decisión**: para los tests de wiring/contrato HTTP, los plugins `db/redis/queues/socketio` se mockean con `vi.mock` a un nivel de módulo y comparten un objeto `state` en memoria (con Maps y Arrays) que cada `beforeEach` resetea. Los repos mockeados implementan la misma firma que los reales (`findById`, `list`, `insert`, `update`, `delete`, `listByRun`, etc.).
+
+**Alternativas descartadas**:
+- Postgres real con `docker compose --profile test up` + `pnpm db:migrate:test`: añade 10-15s de arranque + dependencia de Docker corriendo; no queremos romper CI/local dev si Docker no está.
+- Drizzle con SQLite en memoria: requiere portar los schemas a SQLite, duplicar dialectos.
+- Integrar pg-mem: otra librería, menos mantenida, drivers inconsistentes.
+
+**Consecuencias**: la regla "DB de test: Postgres real" sigue viva pero se relaja para tests de contrato HTTP (validación, routing, error handling, status codes). **Tests de integración DB-reales** irán en un segundo archivo `__tests__/db.integration.test.ts` con el profile `test` de docker-compose cuando se implementen (pendiente Fase 6). Los tests actuales cubren regresiones de rutas, validación Zod, mappers, y lógica de handlers sin ejecutar SQL.
+
+---
+
+## [2026-04-23] `renderPayload` exportada para tests puros (no virtualizer en jsdom)
+
+**Contexto**: el `LogViewer` usa `@tanstack/react-virtual` que necesita `getBoundingClientRect()` del contenedor para calcular slots visibles. En jsdom el rect siempre es 0, así que el virtualizer renderiza 0 elementos y los tests de contenido fallan.
+
+**Decisión**: se exporta la función pura `renderPayload(event)` desde `log-viewer.tsx` y se testea directamente para cada tipo de evento (`assistant_message`, `tool_use`, `tool_result`, `usage`, `error`, `unknown`). El componente en sí sólo se testea en el placeholder (estado vacío), que sí renderiza en jsdom porque no depende del virtualizer.
+
+**Alternativas descartadas**:
+- Stub de `getBoundingClientRect` + `ResizeObserver`: frágil, dependiente de la implementación interna del virtualizer.
+- Playwright E2E contra la página real: postpone el feedback; mejor para Fase 6.
+- No testear: el renderizado por tipo de evento tiene suficientes ramas para justificar coverage.
+
+**Consecuencias**: si se cambia la firma/lógica de `renderPayload`, los tests lo pillan. El comportamiento visual del virtualizer queda fuera del coverage unit — se verá al correr la app o en E2E.
+
+---
+
+## [2026-04-23] Tests de componentes que usan `@/lib/api` mockean el módulo
+
+**Contexto**: `HealthBadge` hace `useQuery({ queryFn: api.health })`. Intentar mockear `globalThis.fetch` en jsdom para simular la respuesta resultó inestable (Request/Response APIs tienen gaps en jsdom 26, y URLs relativas no siempre funcionan).
+
+**Decisión**: los tests de componentes de web mockean el módulo `@/lib/api` con `vi.mock('@/lib/api', () => ({ api: { health: () => healthMock(), ... } }))`. Cada test configura el `vi.fn()` con el `mockResolvedValueOnce`/`mockRejectedValueOnce` que necesita.
+
+**Consecuencias**: no se testea la serialización/deserialización del fetch (eso vive en tests de `api.ts` si se necesitase). Los tests de componentes se enfocan en comportamiento: qué se muestra según el estado de la query. Los tests de `api.ts` se pueden añadir después si se quiere verificar el manejo de error/status/body.

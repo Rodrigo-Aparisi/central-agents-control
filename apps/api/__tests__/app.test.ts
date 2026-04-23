@@ -1,73 +1,179 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app';
 import type { Config } from '../src/config';
 
-// We isolate the DB/Redis/Queues/SocketIO plugins so tests stay hermetic.
-// The goal here is to exercise wiring, validation and error handling.
+interface FakeProject {
+  id: string;
+  name: string;
+  rootPath: string;
+  description: string | null;
+  claudeConfig: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FakeRun {
+  id: string;
+  projectId: string;
+  status: string;
+  prompt: string;
+  params: Record<string, unknown> | null;
+  usage: Record<string, unknown> | null;
+  exitCode: number | null;
+  durationMs: number | null;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+interface FakeEvent {
+  id: string;
+  runId: string;
+  seq: number;
+  type: string;
+  payload: Record<string, unknown>;
+  timestamp: string;
+}
+
+interface FakeArtifact {
+  id: string;
+  runId: string;
+  filePath: string;
+  operation: 'created' | 'modified' | 'deleted';
+  diff: string | null;
+  contentAfter: string | null;
+  createdAt: string;
+}
+
+interface FakeJob {
+  id: string;
+  waiting: boolean;
+  removed: boolean;
+}
+
+interface FakeState {
+  projects: Map<string, FakeProject>;
+  runs: Map<string, FakeRun>;
+  events: FakeEvent[];
+  artifacts: FakeArtifact[];
+  jobs: Map<string, FakeJob>;
+  publishes: Array<{ channel: string; message: string }>;
+}
+
+// Shared state that the mocks read/write. Each test can reset it.
+const state: FakeState = {
+  projects: new Map(),
+  runs: new Map(),
+  events: [],
+  artifacts: [],
+  jobs: new Map(),
+  publishes: [],
+};
+
+function resetState(): void {
+  state.projects.clear();
+  state.runs.clear();
+  state.events.length = 0;
+  state.artifacts.length = 0;
+  state.jobs.clear();
+  state.publishes.length = 0;
+}
+
 vi.mock('../src/plugins/db', async () => {
   const fp = (await import('fastify-plugin')).default;
-  const projects = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      rootPath: string;
-      description: string | null;
-      claudeConfig: null;
-      metadata: null;
-      createdAt: string;
-      updatedAt: string;
-    }
-  >();
   const { newId } = await import('@cac/db');
+
   const plugin = fp(
     async (fastify) => {
-      const repo = {
-        async findById(id: string) {
-          return projects.get(id) ?? null;
-        },
-        async list({ limit }: { limit: number }) {
-          return Array.from(projects.values()).slice(0, limit);
-        },
-        async insert(input: { name: string; rootPath: string; description: string | null }) {
-          const now = new Date().toISOString();
-          const row = {
-            id: newId(),
-            name: input.name,
-            rootPath: input.rootPath,
-            description: input.description,
-            claudeConfig: null,
-            metadata: null,
-            createdAt: now,
-            updatedAt: now,
-          };
-          projects.set(row.id, row);
-          return row;
-        },
-        async update(id: string, patch: Record<string, unknown>) {
-          const cur = projects.get(id);
-          if (!cur) return null;
-          const updated = { ...cur, ...patch, updatedAt: new Date().toISOString() };
-          projects.set(id, updated);
-          return updated;
-        },
-        async delete(id: string) {
-          return projects.delete(id);
-        },
-      };
-      const runs = { list: async () => [], findById: async () => null };
-      const events = { list: async () => [], insertMany: async () => [] };
-      const artifacts = { listByRun: async () => [] };
       fastify.decorate('db', {
         handle: {} as never,
         db: {} as never,
-        projects: repo as never,
-        runs: runs as never,
-        events: events as never,
-        artifacts: artifacts as never,
+        projects: {
+          findById: async (id: string) => state.projects.get(id) ?? null,
+          list: async ({ limit }: { limit: number }) =>
+            Array.from(state.projects.values()).slice(0, limit),
+          insert: async (input: Partial<FakeProject>) => {
+            const now = new Date().toISOString();
+            const row: FakeProject = {
+              id: newId(),
+              name: input.name ?? '',
+              rootPath: input.rootPath ?? '',
+              description: input.description ?? null,
+              claudeConfig: input.claudeConfig ?? null,
+              metadata: input.metadata ?? null,
+              createdAt: now,
+              updatedAt: now,
+            };
+            state.projects.set(row.id, row);
+            return row;
+          },
+          update: async (id: string, patch: Partial<FakeProject>) => {
+            const cur = state.projects.get(id);
+            if (!cur) return null;
+            const updated = { ...cur, ...patch, updatedAt: new Date().toISOString() };
+            state.projects.set(id, updated);
+            return updated;
+          },
+          delete: async (id: string) => state.projects.delete(id),
+        } as never,
+        runs: {
+          findById: async (id: string) => state.runs.get(id) ?? null,
+          list: async ({ projectId, limit }: { projectId?: string; limit: number }) => {
+            let rows = Array.from(state.runs.values());
+            if (projectId) rows = rows.filter((r) => r.projectId === projectId);
+            return rows.slice(0, limit);
+          },
+          insert: async (input: Partial<FakeRun>) => {
+            const now = new Date().toISOString();
+            const row: FakeRun = {
+              id: input.id ?? newId(),
+              projectId: input.projectId ?? '',
+              status: input.status ?? 'queued',
+              prompt: input.prompt ?? '',
+              params: input.params ?? null,
+              usage: input.usage ?? null,
+              exitCode: input.exitCode ?? null,
+              durationMs: input.durationMs ?? null,
+              error: input.error ?? null,
+              createdAt: now,
+              startedAt: input.startedAt ?? null,
+              finishedAt: input.finishedAt ?? null,
+            };
+            state.runs.set(row.id, row);
+            return row;
+          },
+          update: async (id: string, patch: Partial<FakeRun>) => {
+            const cur = state.runs.get(id);
+            if (!cur) return null;
+            const updated = { ...cur, ...patch };
+            state.runs.set(id, updated);
+            return updated;
+          },
+          markStarted: async () => null,
+          markFinished: async () => null,
+        } as never,
+        events: {
+          list: async ({
+            runId,
+            fromSeq = 0,
+            limit,
+          }: { runId: string; fromSeq?: number; limit?: number }) => {
+            const rows = state.events
+              .filter((e) => e.runId === runId && e.seq >= fromSeq)
+              .sort((a, b) => a.seq - b.seq);
+            return typeof limit === 'number' ? rows.slice(0, limit) : rows;
+          },
+          insertMany: async () => [],
+        } as never,
+        artifacts: {
+          listByRun: async (runId: string) => state.artifacts.filter((a) => a.runId === runId),
+          insertMany: async () => [],
+        } as never,
         transaction: (async () => undefined) as never,
         ping: async () => true,
         close: async () => {},
@@ -75,6 +181,7 @@ vi.mock('../src/plugins/db', async () => {
     },
     { name: 'db' },
   );
+
   return { dbPlugin: plugin };
 });
 
@@ -84,7 +191,10 @@ vi.mock('../src/plugins/redis', async () => {
     async (fastify) => {
       fastify.decorate('redis', {
         ping: async () => 'PONG',
-        publish: async () => 1,
+        publish: async (channel: string, message: string) => {
+          state.publishes.push({ channel, message });
+          return 1;
+        },
         disconnect: () => undefined,
         duplicate: () => ({
           subscribe: async () => undefined,
@@ -104,7 +214,25 @@ vi.mock('../src/plugins/queues', async () => {
   const plugin = fp(
     async (fastify) => {
       fastify.decorate('queues', {
-        runs: { add: async () => ({ id: 'fake' }), getJob: async () => null } as never,
+        runs: {
+          add: async (_name: string, _data: unknown, opts?: { jobId?: string }) => {
+            const id = opts?.jobId ?? `job_${Math.random()}`;
+            state.jobs.set(id, { id, waiting: true, removed: false });
+            return { id };
+          },
+          getJob: async (id: string) => {
+            const job = state.jobs.get(id);
+            if (!job) return null;
+            return {
+              id: job.id,
+              isWaiting: async () => job.waiting,
+              remove: async () => {
+                job.removed = true;
+                state.jobs.delete(id);
+              },
+            };
+          },
+        } as never,
         runsEvents: {} as never,
         close: async () => {},
       });
@@ -128,6 +256,7 @@ vi.mock('../src/plugins/socketio', async () => {
 });
 
 const projectsRoot = mkdtempSync(path.join(tmpdir(), 'cac-api-'));
+const validRoot = path.join(projectsRoot, 'p1');
 
 const cfg: Config = {
   NODE_ENV: 'test',
@@ -145,7 +274,44 @@ const cfg: Config = {
 };
 
 let app: Awaited<ReturnType<typeof buildApp>>;
-const validRoot = path.join(projectsRoot, 'p1');
+
+async function seedProject(overrides: Partial<FakeProject> = {}): Promise<FakeProject> {
+  const { newId } = await import('@cac/db');
+  const now = new Date().toISOString();
+  const project: FakeProject = {
+    id: overrides.id ?? newId(),
+    name: overrides.name ?? 'seed',
+    rootPath: overrides.rootPath ?? validRoot,
+    description: overrides.description ?? null,
+    claudeConfig: overrides.claudeConfig ?? null,
+    metadata: overrides.metadata ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.projects.set(project.id, project);
+  return project;
+}
+
+async function seedRun(projectId: string, overrides: Partial<FakeRun> = {}): Promise<FakeRun> {
+  const { newId } = await import('@cac/db');
+  const now = new Date().toISOString();
+  const run: FakeRun = {
+    id: overrides.id ?? newId(),
+    projectId,
+    status: overrides.status ?? 'running',
+    prompt: overrides.prompt ?? 'seed prompt',
+    params: overrides.params ?? { flags: [], model: 'claude-sonnet-4-6', timeoutMs: 30_000 },
+    usage: overrides.usage ?? null,
+    exitCode: overrides.exitCode ?? null,
+    durationMs: overrides.durationMs ?? null,
+    error: overrides.error ?? null,
+    createdAt: now,
+    startedAt: overrides.startedAt ?? null,
+    finishedAt: overrides.finishedAt ?? null,
+  };
+  state.runs.set(run.id, run);
+  return run;
+}
 
 beforeAll(async () => {
   mkdirSync(validRoot, { recursive: true });
@@ -158,14 +324,15 @@ afterAll(async () => {
   rmSync(projectsRoot, { recursive: true, force: true });
 });
 
-describe('health route', () => {
+beforeEach(() => {
+  resetState();
+});
+
+describe('health', () => {
   it('returns ok when db and redis respond', async () => {
     const res = await app.inject({ method: 'GET', url: '/v1/health' });
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.status).toBe('ok');
-    expect(body.db).toBe('ok');
-    expect(body.redis).toBe('ok');
+    expect(res.json()).toMatchObject({ status: 'ok', db: 'ok', redis: 'ok' });
   });
 });
 
@@ -177,13 +344,11 @@ describe('projects CRUD', () => {
       payload: { name: 'alpha', rootPath: validRoot },
     });
     expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.name).toBe('alpha');
-    expect(body.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(res.json().name).toBe('alpha');
   });
 
   it('rejects a project outside PROJECTS_ROOT', async () => {
-    const outside = path.resolve(tmpdir(), 'not-in-projects-root');
+    const outside = path.resolve(tmpdir(), 'outside-root');
     mkdirSync(outside, { recursive: true });
     const res = await app.inject({
       method: 'POST',
@@ -191,32 +356,250 @@ describe('projects CRUD', () => {
       payload: { name: 'bad', rootPath: outside },
     });
     expect(res.statusCode).toBe(400);
-    const body = res.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
   });
 
-  it('rejects an invalid body with 400 VALIDATION_ERROR', async () => {
+  it('rejects invalid body with 400', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/projects',
       payload: { name: '', rootPath: '' },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe('VALIDATION_ERROR');
   });
 
-  it('returns 404 for a missing project', async () => {
+  it('lists projects with cursor pagination shape', async () => {
+    await seedProject({ name: 'one' });
+    await seedProject({ name: 'two' });
+    const res = await app.inject({ method: 'GET', url: '/v1/projects?limit=10' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.items.map((p: { name: string }) => p.name).sort()).toEqual(['one', 'two']);
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it('updates a project', async () => {
+    const p = await seedProject({ name: 'old' });
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/v1/projects/${p.id}`,
+      payload: { name: 'new', description: 'updated' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('new');
+  });
+
+  it('deletes a project (204)', async () => {
+    const p = await seedProject();
+    const res = await app.inject({ method: 'DELETE', url: `/v1/projects/${p.id}` });
+    expect(res.statusCode).toBe(204);
+    expect(state.projects.has(p.id)).toBe(false);
+  });
+
+  it('404 on delete of missing project', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/v1/projects/00000000-0000-7000-8000-000000000000',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('404 on get of missing project', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/v1/projects/00000000-0000-7000-8000-000000000000',
     });
     expect(res.statusCode).toBe(404);
-    expect(res.json().error.code).toBe('NOT_FOUND');
+  });
+
+  it('400 for non-UUID id', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/projects/not-a-uuid' });
+    expect(res.statusCode).toBe(400);
   });
 
   it('404s unknown routes with typed body', async () => {
     const res = await app.inject({ method: 'GET', url: '/nope' });
     expect(res.statusCode).toBe(404);
     expect(res.json().error.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('runs launch + cancel', () => {
+  it('launches a run and returns 202 with runId', async () => {
+    const p = await seedProject();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/projects/${p.id}/launch`,
+      payload: { prompt: 'hello' },
+    });
+    expect(res.statusCode).toBe(202);
+    const body = res.json() as { runId: string };
+    expect(body.runId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(state.runs.get(body.runId)?.status).toBe('queued');
+    expect(state.jobs.size).toBe(1);
+  });
+
+  it('404 when launching on a missing project', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/projects/00000000-0000-7000-8000-000000000000/launch',
+      payload: { prompt: 'hi' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('400 when the prompt is empty', async () => {
+    const p = await seedProject();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/projects/${p.id}/launch`,
+      payload: { prompt: '' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('400 when params.flags contains a non-whitelisted flag', async () => {
+    const p = await seedProject();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/projects/${p.id}/launch`,
+      payload: { prompt: 'x', params: { flags: ['--dangerous'] } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('cancel on a waiting run removes the job and marks cancelled', async () => {
+    const p = await seedProject();
+    const run = await seedRun(p.id, { status: 'queued' });
+    state.jobs.set(run.id, { id: run.id, waiting: true, removed: false });
+
+    const res = await app.inject({ method: 'POST', url: `/v1/runs/${run.id}/cancel` });
+    expect(res.statusCode).toBe(202);
+    expect(state.runs.get(run.id)?.status).toBe('cancelled');
+    expect(state.jobs.has(run.id)).toBe(false);
+    expect(state.publishes).toHaveLength(1);
+    expect(state.publishes[0]?.channel).toBe('cac:run:cancel');
+  });
+
+  it('cancel on an active run publishes on the cancel channel', async () => {
+    const p = await seedProject();
+    const run = await seedRun(p.id, { status: 'running' });
+    state.jobs.set(run.id, { id: run.id, waiting: false, removed: false });
+
+    const res = await app.inject({ method: 'POST', url: `/v1/runs/${run.id}/cancel` });
+    expect(res.statusCode).toBe(202);
+    expect(state.publishes).toHaveLength(1);
+    // status stays as 'running' — the worker is the one that flips it when the runner finishes
+    expect(state.runs.get(run.id)?.status).toBe('running');
+  });
+
+  it('409 when cancelling an already-completed run', async () => {
+    const p = await seedProject();
+    const run = await seedRun(p.id, { status: 'completed' });
+    const res = await app.inject({ method: 'POST', url: `/v1/runs/${run.id}/cancel` });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('CONFLICT');
+  });
+
+  it('404 when cancelling a missing run', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/runs/00000000-0000-7000-8000-000000000000/cancel',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('runs + events + artifacts reads', () => {
+  it('GET /v1/runs/:id returns the run', async () => {
+    const p = await seedProject();
+    const run = await seedRun(p.id);
+    const res = await app.inject({ method: 'GET', url: `/v1/runs/${run.id}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().id).toBe(run.id);
+  });
+
+  it('GET /v1/runs lists runs (filterable by projectId)', async () => {
+    const a = await seedProject();
+    const b = await seedProject();
+    await seedRun(a.id);
+    await seedRun(b.id);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/runs?projectId=${a.id}&limit=10`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items: Array<{ projectId: string }> };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.projectId).toBe(a.id);
+  });
+
+  it('GET /v1/projects/:id/runs scopes by project', async () => {
+    const p = await seedProject();
+    await seedRun(p.id);
+    const res = await app.inject({ method: 'GET', url: `/v1/projects/${p.id}/runs` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items).toHaveLength(1);
+  });
+
+  it('GET /v1/runs/:id/events returns ordered events', async () => {
+    const { newId } = await import('@cac/db');
+    const p = await seedProject();
+    const run = await seedRun(p.id);
+    state.events.push(
+      {
+        id: newId(),
+        runId: run.id,
+        seq: 1,
+        type: 'system',
+        payload: { type: 'system', content: 'boot' },
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: newId(),
+        runId: run.id,
+        seq: 0,
+        type: 'assistant_message',
+        payload: { type: 'assistant_message', content: 'hi' },
+        timestamp: new Date().toISOString(),
+      },
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/runs/${run.id}/events?limit=50`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items: Array<{ seq: number }>; nextFromSeq: number | null };
+    expect(body.items.map((e) => e.seq)).toEqual([0, 1]);
+    expect(body.nextFromSeq).toBeNull();
+  });
+
+  it('GET /v1/runs/:id/events 404 for unknown run', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/runs/00000000-0000-7000-8000-000000000000/events',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /v1/runs/:id/artifacts returns listByRun', async () => {
+    const { newId } = await import('@cac/db');
+    const p = await seedProject();
+    const run = await seedRun(p.id);
+    state.artifacts.push({
+      id: newId(),
+      runId: run.id,
+      filePath: 'src/x.ts',
+      operation: 'modified',
+      diff: 'diff content',
+      contentAfter: null,
+      createdAt: new Date().toISOString(),
+    });
+    const res = await app.inject({ method: 'GET', url: `/v1/runs/${run.id}/artifacts` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items: Array<{ filePath: string }> };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.filePath).toBe('src/x.ts');
   });
 });

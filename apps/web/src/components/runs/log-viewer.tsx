@@ -85,7 +85,7 @@ function EventRow({ ev }: { ev: RunEvent }) {
   );
 }
 
-function renderPayload(ev: RunEvent): string {
+export function renderPayload(ev: RunEvent): string {
   const p = ev.payload;
   switch (p.type) {
     case 'assistant_message':
