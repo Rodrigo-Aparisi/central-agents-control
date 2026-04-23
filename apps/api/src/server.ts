@@ -32,4 +32,10 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+main().catch((err) => {
+  // Surface startup failures (missing env, failed config, etc.) in the combined
+  // `pnpm dev` output. tsx watch swallows unhandled rejections otherwise.
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  console.error(`\n[api] fatal during startup:\n${detail}\n`);
+  process.exit(1);
+});
