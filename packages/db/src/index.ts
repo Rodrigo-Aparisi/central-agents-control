@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { type CreateDbOptions, type Db, type DbHandle, createPgClient } from './client';
 import { type ProjectsRepo, makeProjectsRepo } from './repos/projects';
 import { type RunArtifactsRepo, makeRunArtifactsRepo } from './repos/run-artifacts';
@@ -16,6 +17,7 @@ export interface CacDb {
   events: RunEventsRepo;
   artifacts: RunArtifactsRepo;
   transaction: Db['transaction'];
+  ping: () => Promise<boolean>;
   close: () => Promise<void>;
 }
 
@@ -30,6 +32,10 @@ export function createDb(opts: CreateDbOptions): CacDb {
     events: makeRunEventsRepo(db),
     artifacts: makeRunArtifactsRepo(db),
     transaction: db.transaction.bind(db),
+    ping: async () => {
+      await db.execute(sql`select 1`);
+      return true;
+    },
     close: () => handle.close(),
   };
 }

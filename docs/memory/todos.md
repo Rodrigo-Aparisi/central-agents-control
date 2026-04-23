@@ -40,17 +40,17 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 
 ---
 
-## Fase 3 — API MVP
+## Fase 3 — API MVP *(completado 2026-04-23)*
 
-- [ ] `apps/api`: estructura Fastify + pino-http + config.ts con Zod
-- [ ] `AppError` + error handler global
-- [ ] Plugin `projects`: CRUD completo (`GET`, `POST`, `PUT`, `DELETE`)
-- [ ] Plugin `runs`: launch (202 + BullMQ), cancel, get status
-- [ ] Plugin `events`: GET paginado de eventos de un run
-- [ ] Plugin `artifacts`: GET artefactos de un run
-- [ ] Plugin `health`: GET con ping a DB y Redis
-- [ ] BullMQ worker `runs`: integración runner → batch insert eventos → Socket.IO emit
-- [ ] Socket.IO: namespace `/runs`, rooms por `runId`, `run:event` + `run:status` + `run:log`
+- [x] `apps/api`: estructura Fastify + pino-http + config.ts con Zod
+- [x] `AppError` + error handler global
+- [x] Plugin `projects`: CRUD completo (`GET`, `POST`, `PUT`, `DELETE`)
+- [x] Plugin `runs`: launch (202 + BullMQ), cancel, get status
+- [x] Plugin `events`: GET paginado de eventos de un run
+- [x] Plugin `artifacts`: GET artefactos de un run
+- [x] Plugin `health`: GET con ping a DB y Redis
+- [x] BullMQ worker `runs`: integración runner → batch insert eventos → Socket.IO emit
+- [x] Socket.IO: namespace `/runs`, rooms por `runId`, `run:event` + `run:status` + `run:log`
 
 ---
 

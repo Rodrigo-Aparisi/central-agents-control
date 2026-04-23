@@ -159,3 +159,49 @@ Registro de decisiones no obvias del código. Formato por entrada:
 **Decisión**: el parser acepta varios aliases por tipo (`assistant` / `assistant_message` / `message` con rol assistant), lee tokens tanto desde un objeto raíz `usage` como desde campos top-level, y traduce cualquier tipo desconocido a `EventPayload { type: 'unknown', raw }` en lugar de descartar o crashear. Los `tool_use` con herramienta fuera de whitelist se marcan como `SuspiciousEvent` separado del flujo normal.
 
 **Consecuencias**: la definición de la whitelist de tools vive en `packages/claude-runner/src/parser.ts::TOOL_USE_WHITELIST`; cuando se amplíe hay que revisar explícitamente en vez de asumirlo. Un cambio en Claude CLI que rename `tool_use` a otro discriminador se verá como `unknown` — aceptable; se detecta con el log warn y se parchea sin urgencia.
+
+---
+
+## [2026-04-23] Cancelación de runs via pub/sub de Redis
+
+**Contexto**: el handler HTTP de `POST /v1/runs/:id/cancel` y el worker BullMQ que corre el runner pueden estar en el mismo proceso (v1) o en procesos distintos (v2). Si el job está en `waiting`, se puede cancelar directamente desde el handler (`job.remove()`), pero si ya está `active` necesitamos señalar al worker para que invoque `runner.cancel()`.
+
+**Decisión**: el handler publica en un canal Redis (`cac:run:cancel`). El worker mantiene `Map<runId, cancelFn>` de los runs activos y se suscribe con un cliente Redis duplicado (BullMQ exige una conexión propia por subscriber). Al recibir el mensaje busca el runId y llama a la función, que dispara SIGTERM→5s→SIGKILL en el runner.
+
+**Alternativas descartadas**:
+- `job.updateData()` + polling: añade latencia y carga Redis innecesariamente.
+- BullMQ eventos de "queue.drain" / "removed": no hay evento nativo para "cancélame" sobre un job activo.
+- Shared memory (`Map`) en proceso: rompe cuando API y worker están en procesos distintos (v2 con Docker).
+- WebSocket del cliente al worker: demasiado acoplamiento, obliga a tener sticky sessions.
+
+**Consecuencias**: los mensajes de cancel son "fire-and-forget" — si llegan antes de que el worker haya registrado el canceller, se pierden. En la práctica el runner arranca antes de cualquier click humano, pero si hubiera riesgo real se podría persistir el intento de cancel en la DB y que el worker lo consulte al registrar el canceller.
+
+---
+
+## [2026-04-23] Stack de API MVP: Fastify 5 + fastify-type-provider-zod
+
+**Contexto**: elección concreta de librerías para Fastify (plugin type provider, cors, rate-limit, socket.io setup).
+
+**Decisión**:
+- Fastify 5 + `fastify-plugin` + `fastify-type-provider-zod` para validación/serialización con schemas Zod.
+- `@fastify/sensible` (sólo httpErrors util, no más).
+- Socket.IO attachado al servidor HTTP de Fastify (`fastify.server`) en el path `/ws`, con namespace `/runs` (definido en `@cac/shared`).
+- `close-with-grace` para shutdown ordenado que cierra worker + app.
+- `ioredis` para cliente Redis (el compatible con BullMQ 5).
+
+**Alternativas descartadas**:
+- Express + Ajv a mano: más código, peor tipado, sin plugin system.
+- ts-rest o tRPC: añaden otra capa de contratos sobre los schemas Zod que ya tenemos en `@cac/shared`; no aporta.
+- SSE + fetch streaming: ya descartado (ver decision Socket.IO sobre SSE).
+
+**Consecuencias**: los plugins de rutas heredan el `ZodTypeProvider` con `fastify.withTypeProvider<ZodTypeProvider>()`. Para el schema de respuesta `204 No Content`, se usa `z.null()` y el handler llama `reply.code(204).send(null)` (el serializer convierte a empty body).
+
+---
+
+## [2026-04-23] Helper `ping()` en `CacDb` en vez de exponer drizzle-orm
+
+**Contexto**: el healthcheck de la API tenía que ejecutar `select 1` para validar la DB. Intentamos importar `sql` de `drizzle-orm` desde `apps/api`, pero añadir drizzle-orm como dep de API rompe el encapsulamiento (db es librería, api no debería saber de Drizzle).
+
+**Decisión**: añadir `db.ping(): Promise<boolean>` al factory `createDb` en `@cac/db`. La API sólo depende de `@cac/db`, no de `drizzle-orm`.
+
+**Consecuencias**: `@cac/db` define la superficie pública mínima; añadir más métodos "cross-cutting" (estadísticas, counts de health) sigue este patrón.
