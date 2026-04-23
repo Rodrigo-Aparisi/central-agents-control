@@ -122,3 +122,40 @@ Registro de decisiones no obvias del código. Formato por entrada:
 **Decisión**: `packageManager` del `package.json` raíz fija `pnpm@9.15.9`. `engines.pnpm >= 9.0.0`. Mientras no haya motivo, no se salta a pnpm 10 (breaking changes en resolución de peer deps).
 
 **Consecuencias**: cualquier colaborador necesita pnpm 9.x. Corepack sigue siendo la vía recomendada si tiene permisos; si no, `npm i -g pnpm@9` en el prefix del usuario.
+
+---
+
+## [2026-04-23] `envExtras` y `argsPrefix` en `RunnerConfig`
+
+**Contexto**: el runner sanea el env del proceso hijo a una whitelist mínima (PATH, HOME/USERPROFILE, etc.). Esto es correcto por seguridad, pero los tests necesitaban propagar `FAKE_CLAUDE_SCENARIO` al binario fake, y en producción existen proyectos con secretos propios (p.ej. `GH_TOKEN` de una organización concreta) que deben llegar al CLI sin abrir el flujo a `{...process.env}`.
+
+**Decisión**: añadir dos campos explícitos al `RunnerConfig`:
+- `envExtras: Record<string,string>` — variables que se mergean encima del env saneado. El caller decide qué entra, nunca el propio proceso padre.
+- `argsPrefix: string[]` — args inyectados *antes* de la secuencia estándar `-p/--output-format/...`. En producción lo usamos vacío; en tests permite invocar `node fake-claude.mjs` reutilizando la misma `startRunner`.
+
+**Alternativas descartadas**:
+- Pasar todo `process.env` y delegar el filtrado al caller: rompe el principio de la whitelist y es fácil introducir regresiones.
+- Duplicar `startRunner` con una variante `startRunnerUnsafe` para tests: duplica código y la versión testeada no sería la real.
+- Inyectar el scenario via un flag CLI del fake: contamina la API pública con concerns de testing.
+
+**Consecuencias**: la API pública del runner expone dos hooks. `argsPrefix` está documentado como hook de tests; si alguien lo usara en producción sería un smell. Vale la pena una nota en la spec (04-orchestration) en algún momento.
+
+---
+
+## [2026-04-23] Fake CLI en `.mjs` invocado vía `process.execPath` (no tsx)
+
+**Contexto**: los tests de integración del runner necesitan un binario que imprima stream-json controlado. Se valoró ejecutarlo con tsx sobre un `.ts` para tener tipos, pero complica el spawn (tsx necesita su propio argv de script) y añade un salto más.
+
+**Decisión**: el fake vive en `packages/claude-runner/test/fake-claude.mjs` (JS nativo). Los tests usan `claudeBin = process.execPath` + `argsPrefix = [fakeScript]`. Node lo interpreta directamente sin herramienta intermedia.
+
+**Consecuencias**: el fake no tiene tipos TypeScript — es un script pequeño (~50 líneas) con lógica trivial, aceptable. Si crece lo convertiremos a `.ts` con un build step.
+
+---
+
+## [2026-04-23] Parser tolerante a esquemas CLI en evolución
+
+**Contexto**: el stream-json de `claude` puede cambiar (alias de `type`, nombres de campos tokens). El parser debe sobrevivir a cambios menores del upstream sin romper el producto.
+
+**Decisión**: el parser acepta varios aliases por tipo (`assistant` / `assistant_message` / `message` con rol assistant), lee tokens tanto desde un objeto raíz `usage` como desde campos top-level, y traduce cualquier tipo desconocido a `EventPayload { type: 'unknown', raw }` en lugar de descartar o crashear. Los `tool_use` con herramienta fuera de whitelist se marcan como `SuspiciousEvent` separado del flujo normal.
+
+**Consecuencias**: la definición de la whitelist de tools vive en `packages/claude-runner/src/parser.ts::TOOL_USE_WHITELIST`; cuando se amplíe hay que revisar explícitamente en vez de asumirlo. Un cambio en Claude CLI que rename `tool_use` a otro discriminador se verá como `unknown` — aceptable; se detecta con el log warn y se parchea sin urgencia.

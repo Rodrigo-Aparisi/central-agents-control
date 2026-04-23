@@ -28,15 +28,15 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 
 ---
 
-## Fase 2 — Runner mínimo
+## Fase 2 — Runner mínimo *(completado 2026-04-23)*
 
-- [ ] `packages/claude-runner`: estructura de paquete + `package.json`
-- [ ] `runner.start()`: spawn con execa, config base, sanitizedEnv
-- [ ] `src/parser.ts`: readline sobre stdout, mapeo stream-json → RunEvent
-- [ ] `src/redact.ts`: patrones de secretos (sk-ant, ghp_, gho_, URLs con creds)
-- [ ] `src/cwd.ts`: validación `projectRoot` contra `PROJECTS_ROOT`
-- [ ] `runner.cancel()`: SIGTERM → 5s → SIGKILL
-- [ ] Tests: parser con fixtures, cancelación, cwd inválido, fake-claude binario
+- [x] `packages/claude-runner`: estructura de paquete + `package.json`
+- [x] `runner.start()`: spawn con execa, config base, sanitizedEnv
+- [x] `src/parser.ts`: readline sobre stdout, mapeo stream-json → RunEvent
+- [x] `src/redact.ts`: patrones de secretos (sk-ant, ghp_, gho_, URLs con creds)
+- [x] `src/cwd.ts`: validación `projectRoot` contra `PROJECTS_ROOT`
+- [x] `runner.cancel()`: SIGTERM → 5s → SIGKILL
+- [x] Tests: parser con fixtures, cancelación, cwd inválido, fake-claude binario
 
 ---
 
