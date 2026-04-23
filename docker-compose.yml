@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cac-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cac}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cac}
+      POSTGRES_DB: ${POSTGRES_DB:-cac}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - cac_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cac} -d ${POSTGRES_DB:-cac}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: cac-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cac
+      POSTGRES_PASSWORD: cac
+      POSTGRES_DB: cac_test
+    ports:
+      - "${POSTGRES_TEST_PORT:-5433}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cac -d cac_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    profiles:
+      - test
+
+  redis:
+    image: redis:7-alpine
+    container_name: cac-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - cac_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+volumes:
+  cac_pg_data:
+  cac_redis_data:

@@ -83,3 +83,42 @@ Registro de decisiones no obvias del código. Formato por entrada:
 - Sin restricción (confiar en que el admin registra paths seguros): inaceptable; en v2 con multi-usuario cualquier viewer podría manipular el path.
 
 **Consecuencias**: el operador debe configurar `PROJECTS_ROOT` correctamente en el `.env`. Si un proyecto legítimo está fuera de ese directorio, hay que moverlo o ampliar `PROJECTS_ROOT`. En Windows hay que normalizar separadores (`path.win32`) antes del prefix check.
+
+---
+
+## [2026-04-23] Imports internos sin extensión `.js` en paquetes TS
+
+**Contexto**: con `moduleResolution: "Bundler"` + `verbatimModuleSyntax: true`, los imports relativos pueden o no llevar `.js`. Inicialmente se escribieron con `.js` (estilo Node ESM). Al ejecutar `drizzle-kit generate` falla con `Cannot find module './enums.js'` porque el loader interno de drizzle-kit (esbuild-kit sobre CJS) no resuelve `.js` → `.ts`.
+
+**Decisión**: los imports relativos **dentro del monorepo** se escriben sin extensión (`from './enums'`, no `from './enums.js'`). Vitest, tsx, tsc (modo Bundler) y drizzle-kit resuelven correctamente. Los imports de módulos de `node:` sí llevan prefijo (`node:path`, `node:url`).
+
+**Alternativas descartadas**:
+- Mantener `.js` y parchear drizzle-kit: su loader no respeta `moduleResolution: Bundler`. Cambiarlo es frágil.
+- Compilar a `dist/` antes de correr drizzle-kit: añade paso extra; preferimos cero-build en dev.
+- `resolveJsonModule: true` + custom resolver: sobre-engineering para un problema resuelto con una convención.
+
+**Consecuencias**: no se podrá publicar `@cac/db` o `@cac/shared` como paquetes npm ESM puros sin un paso de compilación que rewrite los imports. Es aceptable: son paquetes internos del monorepo. Al añadir nuevos paquetes, seguir la convención (sin `.js` en relativos).
+
+---
+
+## [2026-04-23] Node ESM compilado vs TS directo en consumidores
+
+**Contexto**: todos los `package.json` de paquetes internos apuntan `main`/`types` directamente a `./src/index.ts` (no a `./dist`). No hay `tsc --build` en el flujo de dev.
+
+**Decisión**: los consumidores (`apps/api`, `apps/web`) cargan TS directamente vía tsx (dev) o via su bundler (Vite para web). Sólo `apps/api` produce `dist/` para `pnpm start` (modo producción local).
+
+**Alternativas descartadas**:
+- `tsc -b` incremental + `references` entre paquetes: añade latencia en dev y complica debugging.
+- Bundle cada paquete con tsup: sobra para paquetes puros Node/TS sin dependencias exóticas.
+
+**Consecuencias**: arranque de dev inmediato (`tsx watch`). Si en el futuro se publica alguno de estos paquetes, habrá que introducir un paso de build; hoy el monorepo es cerrado.
+
+---
+
+## [2026-04-23] pnpm 9 fijado vía `packageManager`
+
+**Contexto**: Corepack falló al activar pnpm (permisos en `C:\Program Files\nodejs`). Se instaló pnpm 9.15.9 global por usuario vía `npm -g`.
+
+**Decisión**: `packageManager` del `package.json` raíz fija `pnpm@9.15.9`. `engines.pnpm >= 9.0.0`. Mientras no haya motivo, no se salta a pnpm 10 (breaking changes en resolución de peer deps).
+
+**Consecuencias**: cualquier colaborador necesita pnpm 9.x. Corepack sigue siendo la vía recomendada si tiene permisos; si no, `npm i -g pnpm@9` en el prefix del usuario.

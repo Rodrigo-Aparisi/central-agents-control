@@ -16,15 +16,15 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 
 ---
 
-## Fase 1 — Bootstrap del monorepo
+## Fase 1 — Bootstrap del monorepo *(completado 2026-04-23)*
 
-- [ ] Inicializar `pnpm init` + `pnpm-workspace.yaml` con los 5 workspaces
-- [ ] Configurar `tsconfig.json` base + tsconfigs por paquete (`strict: true`, `noUncheckedIndexedAccess`)
-- [ ] Configurar Biome (`biome.json`): lint + format, reglas base
-- [ ] Configurar Vitest (`vitest.config.ts`) base compartida
-- [ ] `packages/shared`: Zod schemas iniciales (errores, run status, event types, claude flags whitelist)
-- [ ] `packages/db`: schema Drizzle inicial (4 tablas) + primera migración + `createDb` factory
-- [ ] `docker-compose.yml`: postgres 16 + redis 7 con health checks y volúmenes
+- [x] Inicializar `pnpm init` + `pnpm-workspace.yaml` con los 5 workspaces
+- [x] Configurar `tsconfig.json` base + tsconfigs por paquete (`strict: true`, `noUncheckedIndexedAccess`)
+- [x] Configurar Biome (`biome.json`): lint + format, reglas base
+- [x] Configurar Vitest (`vitest.config.ts`) base compartida
+- [x] `packages/shared`: Zod schemas iniciales (errores, run status, event types, claude flags whitelist)
+- [x] `packages/db`: schema Drizzle inicial (4 tablas) + primera migración + `createDb` factory
+- [x] `docker-compose.yml`: postgres 16 + redis 7 con health checks y volúmenes
 
 ---
 

@@ -1,0 +1,28 @@
+{
+  "name": "@cac/claude-runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cac/shared": "workspace:*",
+    "execa": "^9.5.2",
+    "split2": "^4.2.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/split2": "^4.2.3",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
