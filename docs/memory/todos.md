@@ -95,13 +95,15 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 - [x] F-08 API: `GET /v1/projects/:id/run-graph` con nodos + edges parent→child
 - [x] F-11 API: `GET /v1/projects/:id/files` + `/files/content` con realpath + prefix check
 
-### Fase 6b — visualizaciones + E2E *(pendiente, requiere `/frontend-design`)*
+### Fase 6b — visualizaciones + E2E *(completado 2026-04-23)*
 
-- [ ] F-07: charts Recharts en /dashboard (barras runs/día, línea tokens acumulados, pie estados)
-- [ ] F-08: tab Graph con `@xyflow/react` + dagre layout
-- [ ] F-09: timeline slider + jump-to-error en `/runs/:id`
-- [ ] F-11: Monaco file browser (tree + editor lectura) en project detail
-- [ ] Playwright E2E: golden paths (crear proyecto → launch → ver log → ver diff)
+- [x] `/frontend-design` invocado — brief estético "panel de instrumentos" con paleta extendida, IBM Plex, densidad, motion, iconografía
+- [x] Tokens: chart-1..5, status-*, rule-strong/soft, --font-sans/mono + IBM Plex (fontsource), utilidades `.tnum`, `.micro`, `.rule`
+- [x] F-07: charts Recharts — ComposedChart (barras runs + línea tokens acumulados), donut de estados, top proyectos con barras inline; RangeSelector 24h/7d/30d
+- [x] F-08: tab Graph con `@xyflow/react` + dagre — RunNode custom 40px con stripe de estado, click-through a `/runs/:id`
+- [x] F-09: timeline slider con ruler por tipo + jump-to-error + shortcuts (←/→, Shift+←/→, Home/End); LogViewer con `highlightSeq` y marker
+- [x] F-11: tab Files — tree 24px rows con indent guides + Monaco readonly lazy con tema derivado del store `ui`
+- [x] Playwright E2E golden path: projects → project detail → run detail (mocked API)
 
 ---
 

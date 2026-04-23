@@ -1,6 +1,7 @@
 import { ChangedFiles } from '@/components/runs/changed-files';
 import { LogViewer } from '@/components/runs/log-viewer';
 import { RunStatusBadge } from '@/components/runs/run-status-badge';
+import { TimelineSlider } from '@/components/runs/timeline-slider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -13,7 +14,7 @@ import { useRunnerPanelStore } from '@/stores/runnerPanel';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createRoute, useNavigate } from '@tanstack/react-router';
 import { Ban, Download, RotateCcw } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Route as rootRoute } from '../__root';
 
@@ -82,6 +83,8 @@ function RunPage() {
     return Array.from(out.values()).sort((a, b) => a.seq - b.seq);
   }, [initialEvents.data, streamEvents]);
 
+  const [selectedSeq, setSelectedSeq] = useState<number | null>(null);
+
   if (run.isPending) return <p className="text-sm text-muted-foreground">Cargando run…</p>;
   if (run.isError || !run.data) {
     return <p className="text-sm text-destructive">No se pudo cargar el run.</p>;
@@ -89,6 +92,7 @@ function RunPage() {
   const r = run.data;
   const displayStatus = streamStatus ?? r.status;
   const isActive = displayStatus === 'queued' || displayStatus === 'running';
+  const isTerminal = !isActive && mergedEvents.length > 0;
 
   return (
     <div className="space-y-6">
@@ -131,6 +135,10 @@ function RunPage() {
 
       <StatsRow r={r} />
 
+      {isTerminal ? (
+        <TimelineSlider events={mergedEvents} selectedSeq={selectedSeq} onSelect={setSelectedSeq} />
+      ) : null}
+
       <Tabs defaultValue="log">
         <TabsList>
           <TabsTrigger value="log">Log</TabsTrigger>
@@ -142,7 +150,11 @@ function RunPage() {
         </TabsList>
 
         <TabsContent value="log">
-          <LogViewer events={mergedEvents} autoscroll={isActive} />
+          <LogViewer
+            events={mergedEvents}
+            autoscroll={isActive}
+            highlightSeq={isTerminal ? selectedSeq : null}
+          />
         </TabsContent>
 
         <TabsContent value="files">

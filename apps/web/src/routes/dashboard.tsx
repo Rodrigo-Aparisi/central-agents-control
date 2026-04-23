@@ -1,7 +1,12 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ActivityChart } from '@/components/dashboard/activity-chart';
+import { type RangeDays, RangeSelector } from '@/components/dashboard/range-selector';
+import { StatusDonut } from '@/components/dashboard/status-donut';
+import { TopProjects } from '@/components/dashboard/top-projects';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
-import { Link, createRoute } from '@tanstack/react-router';
+import { createRoute } from '@tanstack/react-router';
+import { useState } from 'react';
 import { Route as rootRoute } from './__root';
 
 export const Route = createRoute({
@@ -16,111 +21,111 @@ export const Route = createRoute({
 });
 
 function DashboardPage() {
+  const [days, setDays] = useState<RangeDays>(30);
+
   const { data, isPending, isError } = useQuery({
-    queryKey: ['cac', 'stats', 'global', { days: 30 }],
-    queryFn: () => api.stats.global({ days: 30 }),
+    queryKey: ['cac', 'stats', 'global', { days }],
+    queryFn: () => api.stats.global({ days }),
+    refetchInterval: 30_000,
   });
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Últimos 30 días.</p>
+    <div className="space-y-6 [&>*]:animate-[fadeSlideUp_240ms_ease-out_both]">
+      <style>{staggerStyles}</style>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="micro mt-1">Últimos {days === 1 ? '24 horas' : `${days} días`}</p>
+        </div>
+        <RangeSelector value={days} onChange={setDays} />
       </div>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Cargando…</p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {['a', 'b', 'c', 'd'].map((k) => (
+            <Card key={k}>
+              <CardContent className="h-[88px] animate-pulse bg-muted/30" />
+            </Card>
+          ))}
+        </div>
       ) : isError || !data ? (
         <p className="text-sm text-destructive">No se pudieron cargar las métricas.</p>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat label="Runs" value={String(data.totals.runs)} />
-            <Stat label="Completados" value={String(data.totals.completed)} />
-            <Stat label="Fallidos" value={String(data.totals.failed)} />
-            <Stat label="Coste estimado" value={`$${data.totals.estimatedCostUsd.toFixed(2)}`} />
+            <Kpi label="Runs" value={data.totals.runs.toString()} />
+            <Kpi label="Completados" value={data.totals.completed.toString()} />
+            <Kpi label="Fallidos" value={data.totals.failed.toString()} />
+            <Kpi label="Coste estimado" value={`$${data.totals.estimatedCostUsd.toFixed(2)}`} />
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Top proyectos</CardTitle>
-              <CardDescription>Por número de runs.</CardDescription>
+            <CardHeader className="flex-row items-center justify-between py-3">
+              <CardTitle className="text-sm font-medium">Actividad</CardTitle>
+              <div className="flex items-center gap-3 font-mono text-[11px] text-muted-foreground">
+                <LegendDot color="var(--color-chart-1)" label="Runs" />
+                <LegendDot color="var(--color-chart-2)" label="Tokens acumulados" />
+              </div>
             </CardHeader>
             <CardContent>
-              {data.topProjects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin datos todavía.</p>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {data.topProjects.map((p) => (
-                    <li key={p.projectId} className="flex items-center justify-between py-2">
-                      <Link
-                        to="/projects/$id"
-                        params={{ id: p.projectId }}
-                        className="truncate text-sm hover:text-primary"
-                      >
-                        {p.name}
-                      </Link>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {p.runs} runs · {p.inputTokens + p.outputTokens} tokens
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ActivityChart days={data.days} />
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Actividad diaria</CardTitle>
-              <CardDescription>Visualización con Recharts pendiente en Fase 6b.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {data.days.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin actividad en el periodo.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-muted-foreground">
-                      <tr>
-                        <th className="text-left font-medium">Fecha</th>
-                        <th className="text-right font-medium">Runs</th>
-                        <th className="text-right font-medium">Completados</th>
-                        <th className="text-right font-medium">Fallidos</th>
-                        <th className="text-right font-medium">Tokens</th>
-                        <th className="text-right font-medium">Coste</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.days.map((d) => (
-                        <tr key={d.date} className="border-t border-border">
-                          <td className="py-1 font-mono text-xs">{d.date}</td>
-                          <td className="py-1 text-right">{d.runs}</td>
-                          <td className="py-1 text-right">{d.completed}</td>
-                          <td className="py-1 text-right">{d.failed}</td>
-                          <td className="py-1 text-right">{d.inputTokens + d.outputTokens}</td>
-                          <td className="py-1 text-right">${d.estimatedCostUsd.toFixed(4)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm font-medium">Distribución</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StatusDonut days={data.days} totals={data.totals} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm font-medium">Top proyectos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TopProjects topProjects={data.topProjects} />
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value }: { label: string; value: string }) {
   return (
     <Card>
-      <CardContent className="p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-        <div className="mt-1 font-mono text-2xl">{value}</div>
+      <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+        <span className="micro">{label}</span>
+        <span className="tnum text-[28px] font-medium leading-none">{value}</span>
       </CardContent>
     </Card>
   );
 }
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="inline-block size-2 rounded-full" style={{ backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
+
+const staggerStyles = `
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  div.space-y-6 > :nth-child(1) { animation-delay: 0ms; }
+  div.space-y-6 > :nth-child(2) { animation-delay: 40ms; }
+  div.space-y-6 > :nth-child(3) { animation-delay: 80ms; }
+  div.space-y-6 > :nth-child(4) { animation-delay: 120ms; }
+  div.space-y-6 > :nth-child(5) { animation-delay: 160ms; }
+`;

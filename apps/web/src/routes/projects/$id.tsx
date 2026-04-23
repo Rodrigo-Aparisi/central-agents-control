@@ -1,3 +1,5 @@
+import { FileBrowser } from '@/components/files/file-browser';
+import { RunGraph } from '@/components/graph/run-graph';
 import { RunList } from '@/components/runs/run-list';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -100,6 +102,8 @@ function ProjectDetailPage() {
       <Tabs defaultValue="runs">
         <TabsList>
           <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="graph">Graph</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="settings">Ajustes</TabsTrigger>
         </TabsList>
 
@@ -121,12 +125,32 @@ function ProjectDetailPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="graph">
+          <GraphTab projectId={p.id} />
+        </TabsContent>
+
+        <TabsContent value="files">
+          <FileBrowser projectId={p.id} />
+        </TabsContent>
+
         <TabsContent value="settings">
           <SettingsTab projectId={p.id} />
         </TabsContent>
       </Tabs>
     </div>
   );
+}
+
+function GraphTab({ projectId }: { projectId: string }) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['cac', 'projects', projectId, 'run-graph'],
+    queryFn: () => api.runGraph(projectId),
+    refetchInterval: 10_000,
+  });
+  if (isPending) return <p className="text-sm text-muted-foreground">Cargando graph…</p>;
+  if (isError || !data)
+    return <p className="text-sm text-destructive">No se pudo cargar el graph.</p>;
+  return <RunGraph graph={data} />;
 }
 
 const FLAG_OPTIONS = Array.from(ALLOWED_CLAUDE_FLAGS).filter((f) => f !== '--output-format');

@@ -333,3 +333,49 @@ Registro de decisiones no obvias del código. Formato por entrada:
 - 6a sólo backend, 6b todo el frontend: pierde la oportunidad de cerrar features funcionales (settings, notificaciones) que no necesitan diseño.
 
 **Consecuencias**: el dashboard y el futuro tab Graph ya tienen endpoint listo — al llegar a 6b sólo se cablea la visualización encima. Los tipos en `@cac/shared` (`GlobalStatsResponse`, `RunGraphResponse`, `ListFilesResponse`) fijan el contrato entre slices.
+
+---
+
+## [2026-04-23] Dirección estética Fase 6b: "panel de instrumentos" (IBM Plex + OKLCH)
+
+**Contexto**: Fase 6b añade las primeras superficies visuales distintivas (dashboard de charts, tab Graph, timeline slider, file browser Monaco). La regla `frontend.md` exige invocar `/frontend-design` antes, y este tipo de app (herramienta interna densa, no consumer) necesita una estética clara para no caer en "AI slop".
+
+**Decisión**: se invocó `/frontend-design` con un brief detallado del stack y se adoptó la dirección "panel de instrumentos": densidad informativa primero, IBM Plex Sans + Mono como tipografía, paleta de 5 series de chart derivada del primary con rotación de hue en OKLCH manteniendo L/C, hairlines 1px en `--rule-strong`/`--rule-soft`, números siempre con `.tnum`, micro-labels con `.micro` (0.6875rem uppercase tracking-wider). Cero gradientes decorativos — un único `fillOpacity 0.06` bajo la línea de tokens acumulados.
+
+**Alternativas descartadas**:
+- Estética marketing/colorful: inadecuada para una herramienta de devs que se usa en sesiones largas.
+- Mantener Inter: demasiado genérico; IBM Plex aporta carácter técnico sin ser brutalista.
+- Paleta hardcoded en JS: los charts leen los tokens CSS vía `useThemeColors` para respetar light/dark en tiempo de cambio de tema.
+- Densidad shadcn default: sus paddings son para dashboards SaaS, no para instrumentos — se redujeron heights (nodos xyflow 40px vs 60px default, filas file tree 24px, timeline 56px total).
+
+**Consecuencias**: cualquier primitivo nuevo en v1+ tiene que respetar la misma densidad y tokens. Los charts no deben usar Recharts defaults (curvas animadas, tooltips nativos): se desactivan con `isAnimationActive={false}` y tooltips custom. El brief completo queda como referencia para futuras pantallas.
+
+---
+
+## [2026-04-23] `useThemeColors` con `useMemo` y `void theme` en vez de `useEffect`
+
+**Contexto**: Recharts necesita strings de colores en JS, no clases CSS. Al cambiar tema, los tokens del `:root` mutan y los charts tienen que releer. Biome/React warnings: "theme is an unnecessary dependency" porque `snapshot()` lee de `document.documentElement`, no del param.
+
+**Decisión**: `useMemo(() => { void theme; return snapshot(); }, [theme])`. El `void theme` es explícito sobre que la dependencia es el trigger; el comentario justifica por qué no aparece en el body.
+
+**Alternativas descartadas**:
+- `useState + useEffect + biome-ignore`: genera doble warning (la suppression también se marca como unused porque el motivo real es la re-evaluación, no la state update).
+- `ResizeObserver` sobre documentElement + MutationObserver: sobre-ingeniería.
+- Pasar el tema directamente a cada chart como prop: acopla cada consumer al store; el hook centraliza.
+
+**Consecuencias**: un solo punto donde se reconcilia "tema cambió → refresca colores". Si algún día queremos overrides (p.ej. color por run), se añade a la firma del hook.
+
+---
+
+## [2026-04-23] Playwright E2E con preview + route interception (no API real)
+
+**Contexto**: el golden path de v1 pedía un test E2E que cruzase "crear proyecto → launch → ver log → ver diff". Hacerlo contra una API + DB reales requiere Docker corriendo y migraciones — inaceptable para un suite de tests que se corre local/CI sin infraestructura.
+
+**Decisión**: Playwright arranca `vite preview` en `127.0.0.1:4173` sirviendo el `dist/` ya compilado. Cada test interceptaa `**/v1/**` con `page.route(...)` y responde con JSON mocked, y aborta `**/ws/**` para silenciar Socket.IO. El test valida navegación, tabs y render de contenido sin necesidad de backend.
+
+**Alternativas descartadas**:
+- Dev server (`vite`): usa HMR y es menos estable para E2E.
+- `msw` (Mock Service Worker): añade otra capa que hay que arrancar; `page.route` es nativo de Playwright.
+- Spawn la API real con postgres-test: la fase 5 ya descartó DB real en tests por el coste; mismo argumento aplica aquí.
+
+**Consecuencias**: el E2E prueba wiring de rutas, query loaders y render — no integración con el backend real. Esa queda fuera del CI por ahora; si se quiere un test más ambicioso en v2, tenemos que montar el stack completo con docker-compose + script de seed. Hoy, 387ms de E2E son una tercera pata útil sobre los 106 unit/integration.

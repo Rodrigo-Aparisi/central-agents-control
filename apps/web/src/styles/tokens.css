@@ -20,6 +20,30 @@
   --success: oklch(0.6 0.18 150);
   --warning: oklch(0.75 0.18 80);
   --radius: 0.5rem;
+
+  /* Chart series — 5 stops, hue rotation at matching L / C. */
+  --chart-1: oklch(0.55 0.18 265);
+  --chart-2: oklch(0.55 0.18 200);
+  --chart-3: oklch(0.65 0.17 95);
+  --chart-4: oklch(0.58 0.2 25);
+  --chart-5: oklch(0.55 0.18 315);
+
+  /* Semantic status aliases (pie, graph node stripes). */
+  --status-queued: var(--muted-foreground);
+  --status-running: var(--chart-1);
+  --status-completed: var(--success);
+  --status-cancelled: var(--chart-5);
+  --status-failed: var(--destructive);
+  --status-timeout: var(--warning);
+
+  /* Hairlines & elevation. */
+  --rule-strong: oklch(0.9 0.01 260);
+  --rule-soft: oklch(0.92 0.008 260 / 0.6);
+  --elev-2: 0 2px 8px -4px oklch(0 0 0 / 0.18);
+
+  /* Typography. */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .dark {
@@ -42,4 +66,21 @@
   --accent-foreground: oklch(0.94 0.005 260);
   --success: oklch(0.7 0.17 150);
   --warning: oklch(0.8 0.17 80);
+
+  --chart-1: oklch(0.7 0.17 265);
+  --chart-2: oklch(0.7 0.17 200);
+  --chart-3: oklch(0.78 0.16 95);
+  --chart-4: oklch(0.68 0.2 25);
+  --chart-5: oklch(0.7 0.17 315);
+
+  --status-queued: var(--muted-foreground);
+  --status-running: var(--chart-1);
+  --status-completed: var(--success);
+  --status-cancelled: var(--chart-5);
+  --status-failed: var(--destructive);
+  --status-timeout: var(--warning);
+
+  --rule-strong: oklch(0.27 0.01 260);
+  --rule-soft: oklch(0.27 0.01 260 / 0.5);
+  --elev-2: 0 2px 10px -4px oklch(0 0 0 / 0.45);
 }
