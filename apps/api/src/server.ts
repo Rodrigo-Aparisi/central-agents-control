@@ -3,8 +3,37 @@ import { buildApp } from './app';
 import { loadConfig } from './config';
 import { startRunsWorker } from './workers/runs';
 
+// Use raw writes to bypass any buffering by pnpm -r --parallel. The combined
+// dev output otherwise swallows early failures and all we see is the vite
+// proxy complaining about ECONNREFUSED, with no hint about the real cause.
+function out(msg: string): void {
+  process.stdout.write(`${msg}\n`);
+}
+function err(msg: string): void {
+  process.stderr.write(`${msg}\n`);
+}
+
+process.on('uncaughtException', (e) => {
+  err(`[api] uncaughtException: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  err(
+    `[api] unhandledRejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
+  );
+  process.exit(1);
+});
+
+out('[api] booting…');
+
 async function main(): Promise<void> {
+  out('[api] loading config…');
   const config = loadConfig();
+  out(
+    `[api] config OK (host=${config.API_HOST} port=${config.API_PORT} workers=${config.ENABLE_WORKERS})`,
+  );
+
+  out('[api] building app…');
   const app = await buildApp({ config });
 
   let worker: ReturnType<typeof startRunsWorker> | undefined;
@@ -18,24 +47,23 @@ async function main(): Promise<void> {
     });
   }
 
-  closeWithGrace({ delay: 10_000 }, async ({ err }) => {
-    if (err) app.log.error({ err }, 'fatal error, shutting down');
+  closeWithGrace({ delay: 10_000 }, async ({ err: graceErr }) => {
+    if (graceErr) app.log.error({ err: graceErr }, 'fatal error, shutting down');
     if (worker) await worker.close();
     await app.close();
   });
 
   try {
-    await app.listen({ host: config.API_HOST, port: config.API_PORT });
-  } catch (err) {
-    app.log.error({ err }, 'failed to start listener');
+    const address = await app.listen({ host: config.API_HOST, port: config.API_PORT });
+    out(`[api] listening on ${address}`);
+  } catch (listenErr) {
+    app.log.error({ err: listenErr }, 'failed to start listener');
     process.exit(1);
   }
 }
 
-main().catch((err) => {
-  // Surface startup failures (missing env, failed config, etc.) in the combined
-  // `pnpm dev` output. tsx watch swallows unhandled rejections otherwise.
-  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
-  console.error(`\n[api] fatal during startup:\n${detail}\n`);
+main().catch((e) => {
+  const detail = e instanceof Error ? (e.stack ?? e.message) : String(e);
+  err(`\n[api] fatal during startup:\n${detail}\n`);
   process.exit(1);
 });
