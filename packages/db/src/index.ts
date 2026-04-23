@@ -8,6 +8,13 @@ import { type RunsRepo, makeRunsRepo } from './repos/runs';
 export * from './client';
 export * from './schema/index';
 export { newId } from './lib/uuid';
+export type {
+  DailyStatsRow,
+  GraphNodeRow,
+  ListRunsOptions,
+  TopProjectRow,
+  TotalsRow,
+} from './repos/runs';
 
 export interface CacDb {
   handle: DbHandle;

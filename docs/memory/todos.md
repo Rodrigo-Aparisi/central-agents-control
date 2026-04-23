@@ -82,15 +82,25 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 
 ## Fase 6 — v1 completo *(post-MVP)*
 
-- [ ] F-07: Dashboard de métricas (Recharts)
-- [ ] F-08: Grafo de runs (@xyflow/react + dagre)
-- [ ] F-09: Replay y navegación de eventos (timeline slider)
-- [ ] F-10: Re-run con edición de prompt
-- [ ] F-11: Monaco file browser (lectura)
-- [ ] F-12: Configuración por proyecto (timeout, modelo, flags)
-- [ ] F-13: Notificaciones UI (sonner toasts + badge)
-- [ ] F-14: Dark mode + preferencias persistidas
-- [ ] F-15: Export de run (JSON + Markdown)
+### Fase 6a — backend + features sin visualización *(completado 2026-04-23)*
+
+- [x] Migración `parent_run_id` + schema Drizzle + Run schema en @cac/shared
+- [x] F-10: Re-run endpoint `POST /v1/runs/:id/rerun` + botón UI con prompt editable
+- [x] F-12: Tab Ajustes extendida con `claudeConfig` (model, timeout, flags whitelist)
+- [x] F-13: Notificaciones (toasts `run:status` + badge de activos + document.title)
+- [x] F-14: Prefs persistidas (tema, prefers-color-scheme, logFontSize, diffView)
+- [x] F-15: Export `GET /v1/runs/:id/export?format=json|markdown` + botones download
+- [x] F-07 API: `GET /v1/stats/global` + `/v1/stats/projects/:id` con agregaciones diarias
+- [x] F-07 Web (sin charts): `/dashboard` con totales + tabla de actividad diaria
+- [x] F-08 API: `GET /v1/projects/:id/run-graph` con nodos + edges parent→child
+- [x] F-11 API: `GET /v1/projects/:id/files` + `/files/content` con realpath + prefix check
+
+### Fase 6b — visualizaciones + E2E *(pendiente, requiere `/frontend-design`)*
+
+- [ ] F-07: charts Recharts en /dashboard (barras runs/día, línea tokens acumulados, pie estados)
+- [ ] F-08: tab Graph con `@xyflow/react` + dagre layout
+- [ ] F-09: timeline slider + jump-to-error en `/runs/:id`
+- [ ] F-11: Monaco file browser (tree + editor lectura) en project detail
 - [ ] Playwright E2E: golden paths (crear proyecto → launch → ver log → ver diff)
 
 ---

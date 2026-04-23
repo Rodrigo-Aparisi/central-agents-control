@@ -19,6 +19,7 @@ interface FakeProject {
 interface FakeRun {
   id: string;
   projectId: string;
+  parentRunId: string | null;
   status: string;
   prompt: string;
   params: Record<string, unknown> | null;
@@ -133,6 +134,7 @@ vi.mock('../src/plugins/db', async () => {
             const row: FakeRun = {
               id: input.id ?? newId(),
               projectId: input.projectId ?? '',
+              parentRunId: input.parentRunId ?? null,
               status: input.status ?? 'queued',
               prompt: input.prompt ?? '',
               params: input.params ?? null,
@@ -156,6 +158,26 @@ vi.mock('../src/plugins/db', async () => {
           },
           markStarted: async () => null,
           markFinished: async () => null,
+          dailyStats: async () => [],
+          totals: async () => ({
+            runs: 0,
+            completed: 0,
+            failed: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCostUsd: 0,
+          }),
+          topProjects: async () => [],
+          graphByProject: async (projectId: string) =>
+            Array.from(state.runs.values())
+              .filter((r) => r.projectId === projectId)
+              .map((r) => ({
+                id: r.id,
+                parentRunId: r.parentRunId,
+                status: r.status,
+                createdAt: r.createdAt,
+                prompt: r.prompt,
+              })),
         } as never,
         events: {
           list: async ({
@@ -298,6 +320,7 @@ async function seedRun(projectId: string, overrides: Partial<FakeRun> = {}): Pro
   const run: FakeRun = {
     id: overrides.id ?? newId(),
     projectId,
+    parentRunId: overrides.parentRunId ?? null,
     status: overrides.status ?? 'running',
     prompt: overrides.prompt ?? 'seed prompt',
     params: overrides.params ?? { flags: [], model: 'claude-sonnet-4-6', timeoutMs: 30_000 },
@@ -601,5 +624,132 @@ describe('runs + events + artifacts reads', () => {
     const body = res.json() as { items: Array<{ filePath: string }> };
     expect(body.items).toHaveLength(1);
     expect(body.items[0]?.filePath).toBe('src/x.ts');
+  });
+});
+
+describe('rerun (F-10)', () => {
+  it('clones prompt + params and sets parentRunId', async () => {
+    const p = await seedProject();
+    const original = await seedRun(p.id, {
+      status: 'completed',
+      prompt: 'do the thing',
+      params: { flags: ['--verbose'], model: 'custom', timeoutMs: 60_000 },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/runs/${original.id}/rerun`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(202);
+    const { runId } = res.json() as { runId: string };
+    const cloned = state.runs.get(runId);
+    expect(cloned?.prompt).toBe('do the thing');
+    expect(cloned?.parentRunId).toBe(original.id);
+    expect(cloned?.status).toBe('queued');
+  });
+
+  it('accepts an edited prompt in the body', async () => {
+    const p = await seedProject();
+    const original = await seedRun(p.id, { status: 'completed', prompt: 'v1' });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/runs/${original.id}/rerun`,
+      payload: { prompt: 'v2 updated' },
+    });
+    expect(res.statusCode).toBe(202);
+    const { runId } = res.json() as { runId: string };
+    expect(state.runs.get(runId)?.prompt).toBe('v2 updated');
+  });
+
+  it('404 for missing run', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/runs/00000000-0000-7000-8000-000000000000/rerun',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('run-graph (F-08 API)', () => {
+  it('returns nodes with parent edges for a project', async () => {
+    const p = await seedProject();
+    const a = await seedRun(p.id, { status: 'completed' });
+    const b = await seedRun(p.id, { status: 'completed', parentRunId: a.id });
+    const res = await app.inject({ method: 'GET', url: `/v1/projects/${p.id}/run-graph` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      nodes: Array<{ id: string }>;
+      edges: Array<{ from: string; to: string }>;
+    };
+    expect(body.nodes.map((n) => n.id).sort()).toEqual([a.id, b.id].sort());
+    expect(body.edges).toEqual([{ from: a.id, to: b.id }]);
+  });
+});
+
+describe('stats (F-07 API)', () => {
+  it('returns global stats with defaults', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/stats/global' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      totals: { runs: number };
+      days: unknown[];
+      topProjects: unknown[];
+    };
+    expect(body.totals.runs).toBe(0);
+    expect(Array.isArray(body.days)).toBe(true);
+  });
+
+  it('returns project stats', async () => {
+    const p = await seedProject();
+    const res = await app.inject({ method: 'GET', url: `/v1/stats/projects/${p.id}?days=7` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { projectId: string };
+    expect(body.projectId).toBe(p.id);
+  });
+
+  it('404 for missing project in stats', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/stats/projects/00000000-0000-7000-8000-000000000000',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('export (F-15)', () => {
+  it('returns a JSON download for a run', async () => {
+    const p = await seedProject();
+    const run = await seedRun(p.id, { status: 'completed' });
+    const res = await app.inject({ method: 'GET', url: `/v1/runs/${run.id}/export?format=json` });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.headers['content-disposition']).toMatch(/attachment.*\.json/);
+    const body = JSON.parse(res.payload) as { run: { id: string }; events: unknown[] };
+    expect(body.run.id).toBe(run.id);
+    expect(Array.isArray(body.events)).toBe(true);
+  });
+
+  it('returns a markdown download when format=markdown', async () => {
+    const p = await seedProject();
+    const run = await seedRun(p.id, { status: 'completed', prompt: 'hello' });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/runs/${run.id}/export?format=markdown`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/markdown/);
+    expect(res.payload).toContain('# Run ');
+    expect(res.payload).toContain('hello');
+  });
+
+  it('rejects an unknown format with 400', async () => {
+    const p = await seedProject();
+    const run = await seedRun(p.id);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/runs/${run.id}/export?format=xml`,
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

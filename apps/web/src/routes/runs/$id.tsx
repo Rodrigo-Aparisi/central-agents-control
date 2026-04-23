@@ -11,8 +11,8 @@ import { humanizeError } from '@/lib/errors';
 import { qk } from '@/lib/queryKeys';
 import { useRunnerPanelStore } from '@/stores/runnerPanel';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createRoute } from '@tanstack/react-router';
-import { Ban } from 'lucide-react';
+import { createRoute, useNavigate } from '@tanstack/react-router';
+import { Ban, Download, RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 import { Route as rootRoute } from '../__root';
@@ -30,6 +30,7 @@ export const Route = createRoute({
 
 function RunPage() {
   const { id } = Route.useParams();
+  const navigate = useNavigate();
 
   useRunStream(id);
   const streamEvents = useRunnerPanelStore((s) => s.events);
@@ -65,6 +66,15 @@ function RunPage() {
     onError: (e) => toast.error(humanizeError(e)),
   });
 
+  const rerun = useMutation({
+    mutationFn: () => api.runs.rerun(id),
+    onSuccess: ({ runId }) => {
+      toast.success('Run relanzado');
+      navigate({ to: '/runs/$id', params: { id: runId } });
+    },
+    onError: (e) => toast.error(humanizeError(e)),
+  });
+
   const mergedEvents = useMemo(() => {
     const out = new Map<number, (typeof streamEvents)[number]>();
     for (const ev of initialEvents.data?.items ?? []) out.set(ev.seq, ev);
@@ -90,12 +100,33 @@ function RunPage() {
           </div>
           <p className="font-mono text-xs text-muted-foreground">{r.id}</p>
         </div>
-        {isActive ? (
-          <Button variant="outline" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
-            <Ban className="size-4" />
-            {cancel.isPending ? 'Cancelando…' : 'Cancelar'}
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {isActive ? (
+            <Button variant="outline" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+              <Ban className="size-4" />
+              {cancel.isPending ? 'Cancelando…' : 'Cancelar'}
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => rerun.mutate()} disabled={rerun.isPending}>
+                <RotateCcw className="size-4" />
+                {rerun.isPending ? 'Relanzando…' : 'Re-run'}
+              </Button>
+              <Button variant="outline" asChild>
+                <a href={api.runs.exportUrl(r.id, 'json')} download>
+                  <Download className="size-4" />
+                  JSON
+                </a>
+              </Button>
+              <Button variant="outline" asChild>
+                <a href={api.runs.exportUrl(r.id, 'markdown')} download>
+                  <Download className="size-4" />
+                  Markdown
+                </a>
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <StatsRow r={r} />

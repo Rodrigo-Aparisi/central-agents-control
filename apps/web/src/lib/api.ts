@@ -2,12 +2,18 @@ import type {
   ApiErrorBody,
   Artifact,
   CreateProjectInput,
+  ExportFormat,
+  FileContentResponse,
+  GlobalStatsResponse,
   HealthResponse,
   LaunchRunInput,
   LaunchRunResponse,
+  ListFilesResponse,
   Project,
+  ProjectStatsResponse,
   Run,
   RunEvent,
+  RunGraphResponse,
   RunStatus,
   UpdateProjectInput,
 } from '@cac/shared';
@@ -87,6 +93,8 @@ export const api = {
     launch: (projectId: string, input: LaunchRunInput) =>
       request<LaunchRunResponse>('POST', `/v1/projects/${projectId}/launch`, input),
     cancel: (id: string) => request<Run>('POST', `/v1/runs/${id}/cancel`),
+    rerun: (id: string, input?: { prompt?: string }) =>
+      request<LaunchRunResponse>('POST', `/v1/runs/${id}/rerun`, input ?? {}),
 
     events: (id: string, params?: { fromSeq?: number; limit?: number }) =>
       request<{ items: RunEvent[]; nextFromSeq: number | null }>(
@@ -94,6 +102,34 @@ export const api = {
         buildQuery(`/v1/runs/${id}/events`, params),
       ),
     artifacts: (id: string) => request<{ items: Artifact[] }>('GET', `/v1/runs/${id}/artifacts`),
+    exportUrl: (id: string, format: ExportFormat) =>
+      `${BASE_URL}/v1/runs/${id}/export?format=${format}`,
+  },
+
+  // stats
+  stats: {
+    global: (params?: { days?: number }) =>
+      request<GlobalStatsResponse>('GET', buildQuery('/v1/stats/global', params)),
+    byProject: (projectId: string, params?: { days?: number }) =>
+      request<ProjectStatsResponse>('GET', buildQuery(`/v1/stats/projects/${projectId}`, params)),
+  },
+
+  // run graph (backend only in 6a; xyflow viz in 6b)
+  runGraph: (projectId: string) =>
+    request<RunGraphResponse>('GET', `/v1/projects/${projectId}/run-graph`),
+
+  // files (backend only in 6a; Monaco UI in 6b)
+  files: {
+    list: (projectId: string, path?: string) =>
+      request<ListFilesResponse>(
+        'GET',
+        buildQuery(`/v1/projects/${projectId}/files`, path ? { path } : undefined),
+      ),
+    content: (projectId: string, path: string) =>
+      request<FileContentResponse>(
+        'GET',
+        buildQuery(`/v1/projects/${projectId}/files/content`, { path }),
+      ),
   },
 };
 

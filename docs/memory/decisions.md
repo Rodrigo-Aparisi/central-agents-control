@@ -289,3 +289,47 @@ Registro de decisiones no obvias del código. Formato por entrada:
 **Decisión**: los tests de componentes de web mockean el módulo `@/lib/api` con `vi.mock('@/lib/api', () => ({ api: { health: () => healthMock(), ... } }))`. Cada test configura el `vi.fn()` con el `mockResolvedValueOnce`/`mockRejectedValueOnce` que necesita.
 
 **Consecuencias**: no se testea la serialización/deserialización del fetch (eso vive en tests de `api.ts` si se necesitase). Los tests de componentes se enfocan en comportamiento: qué se muestra según el estado de la query. Los tests de `api.ts` se pueden añadir después si se quiere verificar el manejo de error/status/body.
+
+---
+
+## [2026-04-23] Agregaciones de stats vía `db.execute(sql)` en el repo
+
+**Contexto**: F-07 necesita métricas diarias (runs, tokens, coste) y totales globales. Expresarlas con el query builder de Drizzle (`select({... sum(sql...) ...}).groupBy(...)`) se vuelve verboso por la extracción de campos JSONB (`usage ->> 'inputTokens'::bigint`).
+
+**Decisión**: los métodos `runs.dailyStats()`, `runs.totals()`, `runs.topProjects()` usan `db.execute(sql...)` con SQL crudo y tipado explícito del row. Devuelven shapes estables (`DailyStatsRow`, `TotalsRow`, `TopProjectRow`) que la capa API mapea a los DTOs de `@cac/shared`.
+
+**Alternativas descartadas**:
+- `select({...}).groupBy(date_trunc...)` con agregaciones Drizzle: posible pero requiere importar helpers y sigue siendo menos legible que el SQL plano.
+- Vista materializada: overkill para v1; basta con un índice por `created_at` (ya existe) y las agregaciones ad-hoc.
+- Mover la agregación a la capa de API: rompe la regla "nada de queries SQL sueltas en `apps/api`".
+
+**Consecuencias**: si se cambia el nombre de campos JSONB (`inputTokens`, `estimatedCostUsd`) hay que acordarse de tocar los SQL del repo además del schema de Zod. Está aislado (un solo archivo en `packages/db/src/repos/runs.ts`), aceptable.
+
+---
+
+## [2026-04-23] `parent_run_id` con `onDelete: 'set null'` (no cascade)
+
+**Contexto**: F-08 y F-10 añaden relación padre-hijo entre runs. Si borro el run padre (p.ej. limpieza automatica), que hago con los hijos?
+
+**Decisión**: `parent_run_id` es nullable con FK `onDelete: 'set null'`. Borrar un run padre no borra los hijos; el campo se pone a null y los hijos quedan como runs "raíz" huérfanos.
+
+**Alternativas descartadas**:
+- `cascade`: borrar el padre arrastra a todos los descendientes. Demasiado destructivo; los hijos tienen valor propio (su log, diff, métricas).
+- `restrict`: impide borrar un padre si tiene hijos. Rompe la limpieza automática sin aportar valor.
+- No FK (sólo columna uuid): pierdes la restricción de integridad y las queries del graph se complican.
+
+**Consecuencias**: el grafo de `/run-graph` filtra edges cuyo `parentRunId` ya no esté en el set de nodos devueltos, así las huérfanas se ven como raíz.
+
+---
+
+## [2026-04-23] Slice Fase 6 en 6a (backend + features sin viz) y 6b (visualizaciones + E2E)
+
+**Contexto**: Fase 6 agrupa 10 features + Playwright. Meterlo todo en un commit mezcla backend estable con UI visual distintiva que pide `/frontend-design` (ver rule frontend.md).
+
+**Decisión**: cortar en dos. **6a** entrega todo el backend (rerun, stats, run-graph, files, export) + features web que no requieren componentes visuales distintivos (settings tab, notificaciones, prefs, botones rerun/export, dashboard con totales en tabla). **6b** añade Recharts, xyflow, Monaco, timeline slider y Playwright E2E tras invocar `/frontend-design`.
+
+**Alternativas descartadas**:
+- Todo junto en un commit: revisable con dificultad, y mete visualizaciones sin `/frontend-design` saltándose la regla.
+- 6a sólo backend, 6b todo el frontend: pierde la oportunidad de cerrar features funcionales (settings, notificaciones) que no necesitan diseño.
+
+**Consecuencias**: el dashboard y el futuro tab Graph ya tienen endpoint listo — al llegar a 6b sólo se cablea la visualización encima. Los tipos en `@cac/shared` (`GlobalStatsResponse`, `RunGraphResponse`, `ListFilesResponse`) fijan el contrato entre slices.

@@ -15,9 +15,13 @@ import { redisPlugin } from './plugins/redis';
 import { socketIoPlugin } from './plugins/socketio';
 import { artifactRoutes } from './routes/artifacts';
 import { eventRoutes } from './routes/events';
+import { exportRoutes } from './routes/export';
+import { fileRoutes } from './routes/files';
 import { healthRoutes } from './routes/health';
 import { projectRoutes } from './routes/projects';
+import { runGraphRoutes } from './routes/run-graph';
 import { runRoutes } from './routes/runs';
+import { statsRoutes } from './routes/stats';
 
 export interface BuildAppOptions {
   config: Config;
@@ -49,6 +53,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(runRoutes);
   await app.register(eventRoutes);
   await app.register(artifactRoutes);
+  await app.register(statsRoutes);
+  await app.register(runGraphRoutes);
+  await app.register(fileRoutes);
+  await app.register(exportRoutes);
 
   return app;
 }

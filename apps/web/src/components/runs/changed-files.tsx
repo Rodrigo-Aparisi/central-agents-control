@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { useUiStore } from '@/stores/ui';
 import type { Artifact } from '@cac/shared';
 import { Suspense, lazy, useState } from 'react';
 
@@ -14,8 +15,10 @@ interface Props {
 }
 
 export function ChangedFiles({ artifacts }: Props) {
+  const diffView = useUiStore((s) => s.diffView);
+  const setDiffView = useUiStore((s) => s.setDiffView);
   const [selectedId, setSelectedId] = useState<string | null>(artifacts[0]?.id ?? null);
-  const [splitView, setSplitView] = useState(true);
+  const splitView = diffView === 'split';
 
   if (artifacts.length === 0) {
     return (
@@ -50,7 +53,11 @@ export function ChangedFiles({ artifacts }: Props) {
           <span className="truncate font-mono text-xs text-muted-foreground">
             {selected.filePath}
           </span>
-          <Button variant="ghost" size="sm" onClick={() => setSplitView((v) => !v)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDiffView(splitView ? 'unified' : 'split')}
+          >
             {splitView ? 'Unified' : 'Side-by-side'}
           </Button>
         </div>

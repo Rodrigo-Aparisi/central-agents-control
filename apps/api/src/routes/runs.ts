@@ -144,6 +144,54 @@ export const runRoutes = fp(
         return reply.code(202).send(runToApi(run));
       },
     );
+
+    app.post(
+      '/v1/runs/:id/rerun',
+      {
+        schema: {
+          params: RunIdParams,
+          body: z.object({ prompt: z.string().min(1).max(50_000).optional() }).optional(),
+          response: { 202: LaunchRunResponse },
+        },
+      },
+      async (req, reply) => {
+        const source = await fastify.db.runs.findById(req.params.id);
+        if (!source) throw AppError.notFound(`run ${req.params.id} not found`);
+
+        const prompt = req.body?.prompt ?? source.prompt;
+        const params = (source.params ?? {
+          flags: [],
+          model: 'claude-sonnet-4-6',
+          timeoutMs: fastify.config.RUN_TIMEOUT_MS,
+        }) as RunParams;
+
+        const run = await fastify.db.runs.insert({
+          projectId: source.projectId,
+          parentRunId: source.id,
+          status: 'queued',
+          prompt,
+          params,
+          usage: null,
+          exitCode: null,
+          durationMs: null,
+          error: null,
+          startedAt: null,
+          finishedAt: null,
+        });
+
+        await fastify.queues.runs.add(
+          'run',
+          { runId: run.id, projectId: source.projectId },
+          { jobId: run.id },
+        );
+
+        req.log.info(
+          { runId: run.id, parentRunId: source.id, projectId: source.projectId },
+          'run re-launched',
+        );
+        return reply.code(202).send({ runId: run.id });
+      },
+    );
   },
   { name: 'routes:runs', dependencies: ['db', 'queues', 'config', 'redis'] },
 );

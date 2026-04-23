@@ -46,6 +46,7 @@ export type LaunchRunResponse = z.infer<typeof LaunchRunResponse>;
 export const Run = z.object({
   id: UuidV7,
   projectId: UuidV7,
+  parentRunId: UuidV7.nullable(),
   status: RunStatus,
   prompt: z.string(),
   params: RunParams,
@@ -77,3 +78,90 @@ export const HealthResponse = z.object({
   timestamp: z.string().datetime({ offset: true }),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
+
+export const StatsDailyPoint = z.object({
+  date: z.string(),
+  runs: z.number().int().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  estimatedCostUsd: z.number().nonnegative(),
+});
+export type StatsDailyPoint = z.infer<typeof StatsDailyPoint>;
+
+export const ProjectStatsResponse = z.object({
+  projectId: UuidV7,
+  days: z.array(StatsDailyPoint),
+  totals: z.object({
+    runs: z.number().int().nonnegative(),
+    completed: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    estimatedCostUsd: z.number().nonnegative(),
+  }),
+});
+export type ProjectStatsResponse = z.infer<typeof ProjectStatsResponse>;
+
+export const GlobalStatsResponse = z.object({
+  days: z.array(StatsDailyPoint),
+  totals: z.object({
+    runs: z.number().int().nonnegative(),
+    completed: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    estimatedCostUsd: z.number().nonnegative(),
+  }),
+  topProjects: z.array(
+    z.object({
+      projectId: UuidV7,
+      name: z.string(),
+      runs: z.number().int().nonnegative(),
+      inputTokens: z.number().int().nonnegative(),
+      outputTokens: z.number().int().nonnegative(),
+    }),
+  ),
+});
+export type GlobalStatsResponse = z.infer<typeof GlobalStatsResponse>;
+
+export const RunGraphNode = z.object({
+  id: UuidV7,
+  parentRunId: UuidV7.nullable(),
+  status: RunStatus,
+  createdAt: z.string().datetime({ offset: true }),
+  prompt: z.string(),
+});
+export type RunGraphNode = z.infer<typeof RunGraphNode>;
+
+export const RunGraphResponse = z.object({
+  nodes: z.array(RunGraphNode),
+  edges: z.array(z.object({ from: UuidV7, to: UuidV7 })),
+});
+export type RunGraphResponse = z.infer<typeof RunGraphResponse>;
+
+export const FileEntry = z.object({
+  name: z.string(),
+  path: z.string(),
+  type: z.enum(['file', 'directory']),
+  size: z.number().int().nonnegative().optional(),
+});
+export type FileEntry = z.infer<typeof FileEntry>;
+
+export const ListFilesResponse = z.object({
+  path: z.string(),
+  entries: z.array(FileEntry),
+});
+export type ListFilesResponse = z.infer<typeof ListFilesResponse>;
+
+export const FileContentResponse = z.object({
+  path: z.string(),
+  size: z.number().int().nonnegative(),
+  content: z.string(),
+  truncated: z.boolean(),
+});
+export type FileContentResponse = z.infer<typeof FileContentResponse>;
+
+export const ExportFormat = z.enum(['json', 'markdown']);
+export type ExportFormat = z.infer<typeof ExportFormat>;

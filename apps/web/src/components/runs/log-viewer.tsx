@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { useUiStore } from '@/stores/ui';
 import type { RunEvent } from '@cac/shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useRef } from 'react';
@@ -19,8 +20,15 @@ interface Props {
   autoscroll?: boolean;
 }
 
+const FONT_SIZE_CLASS = {
+  xs: 'text-xs',
+  sm: 'text-sm',
+  md: 'text-base',
+} as const;
+
 export function LogViewer({ events, autoscroll = true }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const fontSize = useUiStore((s) => s.logFontSize);
 
   const virtualizer = useVirtualizer({
     count: events.length,
@@ -45,7 +53,10 @@ export function LogViewer({ events, autoscroll = true }: Props) {
   return (
     <div
       ref={parentRef}
-      className="h-[520px] overflow-auto rounded-md border border-border bg-card/40 font-mono text-xs"
+      className={cn(
+        'h-[520px] overflow-auto rounded-md border border-border bg-card/40 font-mono',
+        FONT_SIZE_CLASS[fontSize],
+      )}
     >
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {virtualizer.getVirtualItems().map((vi) => {

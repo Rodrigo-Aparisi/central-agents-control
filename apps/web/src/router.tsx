@@ -1,6 +1,7 @@
 import { createRouter } from '@tanstack/react-router';
 import { queryClient } from './lib/query';
 import { Route as rootRoute } from './routes/__root';
+import { Route as dashboardRoute } from './routes/dashboard';
 import { Route as indexRoute } from './routes/index';
 import { Route as projectDetailRoute } from './routes/projects/$id';
 import { Route as projectRunNewRoute } from './routes/projects/$id/runs.new';
@@ -15,6 +16,7 @@ const routeTree = rootRoute.addChildren([
   projectRunNewRoute,
   runsIndexRoute,
   runDetailRoute,
+  dashboardRoute,
 ]);
 
 export const router = createRouter({

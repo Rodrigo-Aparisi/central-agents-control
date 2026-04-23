@@ -1,6 +1,14 @@
-import type { RunArtifactRow, RunEventRow, RunRow } from '@cac/db';
+import type { DailyStatsRow, RunArtifactRow, RunEventRow, RunRow, TotalsRow } from '@cac/db';
 import type { ProjectRow } from '@cac/db';
-import type { Artifact, Project, Run, RunEvent, RunParams, RunUsage } from '@cac/shared';
+import type {
+  Artifact,
+  Project,
+  Run,
+  RunEvent,
+  RunParams,
+  RunUsage,
+  StatsDailyPoint,
+} from '@cac/shared';
 
 const DEFAULT_PARAMS: RunParams = {
   flags: [],
@@ -25,6 +33,7 @@ export function runToApi(row: RunRow): Run {
   return {
     id: row.id,
     projectId: row.projectId,
+    parentRunId: row.parentRunId,
     status: row.status,
     prompt: row.prompt,
     params: (row.params ?? DEFAULT_PARAMS) as RunParams,
@@ -59,4 +68,20 @@ export function artifactToApi(row: RunArtifactRow): Artifact {
     contentAfter: row.contentAfter,
     createdAt: row.createdAt,
   };
+}
+
+export function dailyStatsToApi(row: DailyStatsRow): StatsDailyPoint {
+  return {
+    date: row.date,
+    runs: row.runs,
+    completed: row.completed,
+    failed: row.failed,
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
+    estimatedCostUsd: row.estimatedCostUsd,
+  };
+}
+
+export function totalsToApi(row: TotalsRow): TotalsRow {
+  return { ...row };
 }

@@ -1,8 +1,10 @@
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useRunNotifications } from '@/hooks/useRunNotifications';
 import { cn } from '@/lib/cn';
 import { Link } from '@tanstack/react-router';
-import { FolderKanban, Play } from 'lucide-react';
+import { BarChart3, FolderKanban, Play } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { ActiveRunsBadge } from './active-runs-badge';
 import { HealthBadge } from './health-badge';
 import { ThemeToggle } from './theme-toggle';
 
@@ -11,6 +13,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
+  useRunNotifications();
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex min-h-screen">
@@ -22,12 +25,14 @@ export function Layout({ children }: LayoutProps) {
           <nav className="flex flex-col gap-0.5 p-2 text-sm">
             <NavItem to="/projects" icon={<FolderKanban className="size-4" />} label="Proyectos" />
             <NavItem to="/runs" icon={<Play className="size-4" />} label="Runs recientes" />
+            <NavItem to="/dashboard" icon={<BarChart3 className="size-4" />} label="Dashboard" />
           </nav>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur">
             <div className="flex items-center gap-3">
               <HealthBadge />
+              <ActiveRunsBadge />
             </div>
             <div className="flex items-center gap-1">
               <ThemeToggle />
