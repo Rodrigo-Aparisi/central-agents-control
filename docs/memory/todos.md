@@ -54,18 +54,18 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 
 ---
 
-## Fase 4 — Web MVP
+## Fase 4 — Web MVP *(completado 2026-04-23)*
 
-- [ ] `apps/web`: estructura Vite + React 19 + TanStack Router + TanStack Query + Zustand
-- [ ] shadcn/ui: instalación + tokens CSS en `styles/tokens.css` (light + dark)
-- [ ] Layout base: header con badge de health, nav lateral, dark mode toggle
-- [ ] Página `/projects`: lista + formulario de creación
-- [ ] Página `/projects/:id`: detalle + tab runs + tab settings
-- [ ] Página `/projects/:id/runs/new`: formulario de launch
-- [ ] Página `/runs/:id`: log en vivo (virtualizado) + estado + botón cancel
-- [ ] Sección "Changed files" con `react-diff-viewer-continued`
-- [ ] Socket.IO client: join room, handle `run:event` / `run:status`
-- [ ] `runnerPanel` store (Zustand): estado del run activo, eventos
+- [x] `apps/web`: estructura Vite + React 19 + TanStack Router + TanStack Query + Zustand
+- [x] shadcn/ui: instalación + tokens CSS en `styles/tokens.css` (light + dark)
+- [x] Layout base: header con badge de health, nav lateral, dark mode toggle
+- [x] Página `/projects`: lista + formulario de creación
+- [x] Página `/projects/:id`: detalle + tab runs + tab settings
+- [x] Página `/projects/:id/runs/new`: formulario de launch
+- [x] Página `/runs/:id`: log en vivo (virtualizado) + estado + botón cancel
+- [x] Sección "Changed files" con `react-diff-viewer-continued`
+- [x] Socket.IO client: join room, handle `run:event` / `run:status`
+- [x] `runnerPanel` store (Zustand): estado del run activo, eventos
 
 ---
 

@@ -205,3 +205,47 @@ Registro de decisiones no obvias del código. Formato por entrada:
 **Decisión**: añadir `db.ping(): Promise<boolean>` al factory `createDb` en `@cac/db`. La API sólo depende de `@cac/db`, no de `drizzle-orm`.
 
 **Consecuencias**: `@cac/db` define la superficie pública mínima; añadir más métodos "cross-cutting" (estadísticas, counts de health) sigue este patrón.
+
+---
+
+## [2026-04-23] TanStack Router code-based con ruta padre referenciada por import
+
+**Contexto**: la regla `frontend.md` pide "rutas code-based, un archivo por ruta". En TanStack Router code-based cada ruta hija necesita `getParentRoute: () => rootRoute`. Mantener esa referencia en cada archivo acopla cada ruta al archivo `__root.tsx`.
+
+**Decisión**: cada archivo de ruta exporta `Route = createRoute({ getParentRoute: () => rootRoute, path, component, loader })` importando `Route as rootRoute` desde `./__root`. Un `router.tsx` central hace `rootRoute.addChildren([...])` con todas las rutas y construye el `createRouter({ routeTree, context: { queryClient } })`.
+
+**Alternativas descartadas**:
+- File-based con plugin: la regla explícitamente dice "code-based".
+- Un único archivo con todos los routes: rompe "un archivo por ruta".
+- Factory helper: añade indirección que no compensa; el patrón actual es plano y rastreable.
+
+**Consecuencias**: para añadir una ruta: crear `routes/<x>.tsx` con `createRoute(...)`, añadirla al array `addChildren` en `router.tsx`. Si el grupo crece mucho se podría introducir un helper, pero con <10 rutas el patrón manual es claro.
+
+---
+
+## [2026-04-23] `/frontend-design` deferido a Fase 6 (v1 polish)
+
+**Contexto**: la regla `frontend.md` pide invocar `/frontend-design` antes de componentes visuales distintivos (pantallas completas, layouts, cards de run, log panel). Para el MVP de Fase 4 decidí usar shadcn defaults con tokens propios en `styles/tokens.css` sin invocar la skill.
+
+**Decisión**: shadcn/ui + Tailwind 4 con tokens OKLCH light/dark. Componentes de negocio (LogViewer, RunStatusBadge, ChangedFiles, CreateProjectDialog) construidos directamente sobre primitives shadcn. El objetivo de Fase 4 era funcionalidad end-to-end, no polish estético distintivo.
+
+**Alternativas descartadas**:
+- Invocar `/frontend-design` con un brief completo: output potencialmente sobre-diseñado para un dashboard interno y latencia alta.
+- Saltarse tokens y usar colores Tailwind hardcoded: rompe la regla de tokens CSS.
+
+**Consecuencias**: antes de marcar v1 como completada (Fase 6) hay que invocar `/frontend-design` y pasar LogViewer, RunStatusBadge, la tabla de runs y la landing de `/projects` por un rediseño. Tokens ya están en sitio para absorber cambios sin refactor profundo. Si la skill propone motivos gráficos (iconografía propia, tipografía, motion), el wiring de estado no debería tocarse.
+
+---
+
+## [2026-04-23] Conflicto Vite 5/6 resuelto excluyendo `vitest.config.ts` de `tsc`
+
+**Contexto**: `@tailwindcss/vite` requiere Vite 6+; `vitest@2.x` depende de Vite 5. En el monorepo conviven ambos. Al importar `vitest.config.ts` con `import react from '@vitejs/plugin-react'` dentro del scope de web, TS ve dos versiones de los tipos `Plugin` y falla con "Type 'Plugin<any>' is not assignable to type 'PluginOption'".
+
+**Decisión**: `apps/web/tsconfig.json` no incluye `vitest.config.ts` en `include`. Vitest carga el archivo con su propio loader TS; tsc no necesita validarlo. `vite.config.ts` también queda fuera del include por el mismo motivo.
+
+**Alternativas descartadas**:
+- Bump vitest a 3.x en todo el monorepo: más trabajo por un fix de tipos; la API runtime está estable.
+- Downgrade `@tailwindcss/vite`: rompe Tailwind 4.
+- Forzar versión de vite vía `pnpm.overrides`: introduce deuda.
+
+**Consecuencias**: las configs de build (`vite.config.ts`) y test (`vitest.config.ts`) no se typechequean con `tsc --noEmit`. Si se introduce un error de tipo ahí, se verá al correr `pnpm --filter @cac/web dev` o `test`. Aceptable: son archivos estáticos que casi no cambian.

@@ -6,8 +6,10 @@
     "jsx": "react-jsx",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "types": []
+    "types": ["vite/client", "@testing-library/jest-dom"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*", "__tests__/**/*"]
 }

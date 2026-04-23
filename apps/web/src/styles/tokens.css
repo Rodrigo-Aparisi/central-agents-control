@@ -1,0 +1,45 @@
+/* Tokens semánticos (CSS custom properties) aplicados a :root + .dark */
+:root {
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.18 0.01 260);
+  --muted: oklch(0.96 0.005 260);
+  --muted-foreground: oklch(0.47 0.015 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 260);
+  --border: oklch(0.9 0.01 260);
+  --input: oklch(0.92 0.01 260);
+  --ring: oklch(0.6 0.15 265);
+  --primary: oklch(0.55 0.2 265);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.01 260);
+  --secondary-foreground: oklch(0.28 0.03 265);
+  --destructive: oklch(0.55 0.22 28);
+  --destructive-foreground: oklch(0.99 0 0);
+  --accent: oklch(0.96 0.01 260);
+  --accent-foreground: oklch(0.28 0.03 265);
+  --success: oklch(0.6 0.18 150);
+  --warning: oklch(0.75 0.18 80);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.95 0.005 260);
+  --muted: oklch(0.22 0.01 260);
+  --muted-foreground: oklch(0.65 0.02 260);
+  --card: oklch(0.2 0.01 260);
+  --card-foreground: oklch(0.95 0.005 260);
+  --border: oklch(0.27 0.01 260);
+  --input: oklch(0.27 0.01 260);
+  --ring: oklch(0.65 0.18 265);
+  --primary: oklch(0.68 0.18 265);
+  --primary-foreground: oklch(0.12 0.01 260);
+  --secondary: oklch(0.25 0.01 260);
+  --secondary-foreground: oklch(0.94 0.005 260);
+  --destructive: oklch(0.62 0.22 28);
+  --destructive-foreground: oklch(0.99 0 0);
+  --accent: oklch(0.27 0.01 260);
+  --accent-foreground: oklch(0.94 0.005 260);
+  --success: oklch(0.7 0.17 150);
+  --warning: oklch(0.8 0.17 80);
+}
