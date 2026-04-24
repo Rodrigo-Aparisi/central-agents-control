@@ -216,7 +216,12 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
           taskDescriptions.push({ description });
         }
 
-        const filePath = typeof input.file_path === 'string' ? input.file_path : null;
+        const filePath =
+          typeof input.path === 'string'
+            ? input.path
+            : typeof input.file_path === 'string'
+              ? input.file_path
+              : null;
         if (filePath) {
           if (toolLower === 'write') {
             const content = typeof input.content === 'string' ? input.content : null;
