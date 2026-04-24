@@ -1,16 +1,22 @@
 import { asc, eq } from 'drizzle-orm';
 import type { Db } from '../client';
+import { isoTs } from '../lib/dates';
 import { newId } from '../lib/uuid';
 import { type RunArtifactInsert, type RunArtifactRow, runArtifacts } from '../schema/run-artifacts';
+
+function norm(row: RunArtifactRow): RunArtifactRow {
+  return { ...row, createdAt: isoTs(row.createdAt) };
+}
 
 export function makeRunArtifactsRepo(db: Db) {
   return {
     async listByRun(runId: string): Promise<RunArtifactRow[]> {
-      return db
+      const rows = await db
         .select()
         .from(runArtifacts)
         .where(eq(runArtifacts.runId, runId))
         .orderBy(asc(runArtifacts.filePath));
+      return rows.map(norm);
     },
 
     async insertMany(
@@ -18,7 +24,8 @@ export function makeRunArtifactsRepo(db: Db) {
     ): Promise<RunArtifactRow[]> {
       if (rows.length === 0) return [];
       const values: RunArtifactInsert[] = rows.map((r) => ({ ...r, id: r.id ?? newId() }));
-      return db.insert(runArtifacts).values(values).returning();
+      const inserted = await db.insert(runArtifacts).values(values).returning();
+      return inserted.map(norm);
     },
   };
 }

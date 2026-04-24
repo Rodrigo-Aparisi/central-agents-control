@@ -25,6 +25,11 @@ export const socketIoPlugin = fp(
           socket.join(payload.runId);
         }
       });
+      socket.on('leave', (payload: { runId?: unknown }) => {
+        if (typeof payload?.runId === 'string') {
+          socket.leave(payload.runId);
+        }
+      });
     });
 
     fastify.decorate('io', io);

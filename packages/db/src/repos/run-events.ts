@@ -1,7 +1,12 @@
 import { and, asc, eq, gte } from 'drizzle-orm';
 import type { Db } from '../client';
+import { isoTs } from '../lib/dates';
 import { newId } from '../lib/uuid';
 import { type RunEventInsert, type RunEventRow, runEvents } from '../schema/run-events';
+
+function norm(row: RunEventRow): RunEventRow {
+  return { ...row, timestamp: isoTs(row.timestamp) };
+}
 
 export interface ListEventsOptions {
   runId: string;
@@ -17,7 +22,8 @@ export function makeRunEventsRepo(db: Db) {
           ? and(eq(runEvents.runId, runId), gte(runEvents.seq, fromSeq))
           : eq(runEvents.runId, runId);
       const q = db.select().from(runEvents).where(where).orderBy(asc(runEvents.seq));
-      return limit ? q.limit(limit) : q;
+      const rows = await (limit ? q.limit(limit) : q);
+      return rows.map(norm);
     },
 
     async insertMany(
@@ -25,7 +31,8 @@ export function makeRunEventsRepo(db: Db) {
     ): Promise<RunEventRow[]> {
       if (rows.length === 0) return [];
       const values: RunEventInsert[] = rows.map((r) => ({ ...r, id: r.id ?? newId() }));
-      return db.insert(runEvents).values(values).returning();
+      const inserted = await db.insert(runEvents).values(values).returning();
+      return inserted.map(norm);
     },
   };
 }

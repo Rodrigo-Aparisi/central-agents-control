@@ -1,6 +1,12 @@
 import { startRunner } from '@cac/claude-runner';
 import { type CacDb, newId } from '@cac/db';
-import { RUNS_NAMESPACE, type RunEvent, type RunParams, wrapUntrustedInput } from '@cac/shared';
+import {
+  type ArtifactOperation,
+  RUNS_NAMESPACE,
+  type RunEvent,
+  type RunParams,
+  wrapUntrustedInput,
+} from '@cac/shared';
 import type { RunStatusMessage } from '@cac/shared';
 import { Worker } from 'bullmq';
 import type { FastifyBaseLogger } from 'fastify';
@@ -8,6 +14,7 @@ import type { Redis } from 'ioredis';
 import type { Namespace, Server as SocketIOServer } from 'socket.io';
 import type { Config } from '../config';
 import { eventToApi } from '../lib/mappers';
+import { ensureProjectClaudeSettings } from '../lib/project-setup';
 import { RUNS_QUEUE_NAME, type RunJobPayload } from '../plugins/queues';
 
 const BATCH_FLUSH_MS = 200;
@@ -94,6 +101,10 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
     return;
   }
 
+  await ensureProjectClaudeSettings(project.rootPath).catch((err) => {
+    log.warn({ err, rootPath: project.rootPath }, 'could not ensure .claude/settings.json');
+  });
+
   await db.runs.markStarted(runId);
   emitStatus(runsNs, { type: 'run:status', runId, status: 'running' });
 
@@ -136,6 +147,10 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
   const buffer: RunEvent[] = [];
   let seq = 0;
   let flushTimer: NodeJS.Timeout | null = null;
+
+  // Track file operations to populate run_artifacts after the run
+  const artifactOps = new Map<string, ArtifactOperation>();
+  const artifactContents = new Map<string, string | null>();
 
   const flush = async (): Promise<void> => {
     if (buffer.length === 0) return;
@@ -184,6 +199,26 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
         timestamp: ev.timestamp,
       };
       buffer.push(runEvent);
+
+      if (ev.payload.type === 'tool_use') {
+        const { tool, input } = ev.payload;
+        const toolLower = tool.toLowerCase();
+        const filePath = typeof input['file_path'] === 'string' ? input['file_path'] : null;
+        if (filePath) {
+          if (toolLower === 'write') {
+            const content = typeof input['content'] === 'string' ? input['content'] : null;
+            if (!artifactOps.has(filePath)) artifactOps.set(filePath, 'created');
+            artifactContents.set(filePath, content);
+          } else if (toolLower === 'edit') {
+            const newStr = typeof input['new_string'] === 'string' ? input['new_string'] : null;
+            if (!artifactOps.has(filePath)) artifactOps.set(filePath, 'modified');
+            artifactContents.set(filePath, newStr);
+          } else if (toolLower === 'multiedit') {
+            if (!artifactOps.has(filePath)) artifactOps.set(filePath, 'modified');
+          }
+        }
+      }
+
       runsNs.to(runId).emit(
         'run:event',
         eventToApi({
@@ -214,6 +249,20 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
     }
     await flush();
     cancellers.delete(runId);
+
+    if (artifactOps.size > 0) {
+      await db.artifacts
+        .insertMany(
+          Array.from(artifactOps.entries()).map(([filePath, operation]) => ({
+            runId,
+            filePath,
+            operation,
+            contentAfter: artifactContents.get(filePath) ?? null,
+            diff: null,
+          })),
+        )
+        .catch((err) => log.error({ err }, 'failed to persist artifacts'));
+    }
   }
 
   const result = await handle.result;

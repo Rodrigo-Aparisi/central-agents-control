@@ -1,8 +1,18 @@
 import type { RunStatus } from '@cac/shared';
 import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import type { Db } from '../client';
+import { isoTs, isoTsNullable } from '../lib/dates';
 import { newId } from '../lib/uuid';
 import { type RunInsert, type RunRow, runs } from '../schema/runs';
+
+function norm(row: RunRow): RunRow {
+  return {
+    ...row,
+    createdAt: isoTs(row.createdAt),
+    startedAt: isoTsNullable(row.startedAt),
+    finishedAt: isoTsNullable(row.finishedAt),
+  };
+}
 
 export interface ListRunsOptions {
   projectId?: string;
@@ -49,7 +59,7 @@ export function makeRunsRepo(db: Db) {
   return {
     async findById(id: string): Promise<RunRow | null> {
       const rows = await db.select().from(runs).where(eq(runs.id, id)).limit(1);
-      return rows[0] ?? null;
+      return rows[0] ? norm(rows[0]) : null;
     },
 
     async list({ projectId, status, cursor, limit }: ListRunsOptions): Promise<RunRow[]> {
@@ -58,7 +68,8 @@ export function makeRunsRepo(db: Db) {
       if (status) filters.push(eq(runs.status, status));
       if (cursor) filters.push(lt(runs.id, cursor));
       const where = filters.length ? and(...filters) : undefined;
-      return db.select().from(runs).where(where).orderBy(desc(runs.id)).limit(limit);
+      const rows = await db.select().from(runs).where(where).orderBy(desc(runs.id)).limit(limit);
+      return rows.map(norm);
     },
 
     async insert(input: Omit<RunInsert, 'id' | 'createdAt'> & { id?: string }): Promise<RunRow> {
@@ -69,12 +80,12 @@ export function makeRunsRepo(db: Db) {
         .returning();
       const row = rows[0];
       if (!row) throw new Error('insert returned no rows');
-      return row;
+      return norm(row);
     },
 
     async update(id: string, patch: Partial<RunInsert>): Promise<RunRow | null> {
       const rows = await db.update(runs).set(patch).where(eq(runs.id, id)).returning();
-      return rows[0] ?? null;
+      return rows[0] ? norm(rows[0]) : null;
     },
 
     async markStarted(id: string): Promise<RunRow | null> {
@@ -188,7 +199,7 @@ export function makeRunsRepo(db: Db) {
         .from(runs)
         .where(eq(runs.projectId, projectId))
         .orderBy(asc(runs.createdAt));
-      return rows;
+      return rows.map((r) => ({ ...r, createdAt: isoTs(r.createdAt) }));
     },
   };
 }

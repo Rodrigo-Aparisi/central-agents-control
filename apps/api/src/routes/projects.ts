@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   AppError,
   CreateProjectInput,
@@ -12,6 +14,9 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { projectToApi } from '../lib/mappers';
 import { ensureWithinProjectsRoot } from '../lib/project-path';
+import { ensureProjectClaudeSettings } from '../lib/project-setup';
+
+const execFileAsync = promisify(execFile);
 
 const ProjectList = z.object({
   items: z.array(Project),
@@ -47,6 +52,9 @@ export const projectRoutes = fp(
           rootPath: realRoot,
           description: description ?? null,
         });
+        await ensureProjectClaudeSettings(realRoot).catch((err) =>
+          fastify.log.warn({ err, rootPath: realRoot }, 'could not create .claude/settings.json'),
+        );
         return reply.code(201).send(projectToApi(row));
       },
     );
@@ -87,6 +95,32 @@ export const projectRoutes = fp(
         return reply.code(204).send(null);
       },
     );
+
+    app.post(
+      '/v1/projects/:id/open-folder',
+      { schema: { params: IdParams, response: { 204: z.null() } } },
+      async (req, reply) => {
+        const row = await fastify.db.projects.findById(req.params.id);
+        if (!row) throw AppError.notFound(`project ${req.params.id} not found`);
+        ensureWithinProjectsRoot(row.rootPath, fastify.config.resolvedProjectsRoot);
+        await openInExplorer(row.rootPath).catch((err) =>
+          fastify.log.warn({ err, rootPath: row.rootPath }, 'open-folder failed'),
+        );
+        return reply.code(204).send(null);
+      },
+    );
   },
   { name: 'routes:projects', dependencies: ['db', 'config'] },
 );
+
+async function openInExplorer(folderPath: string): Promise<void> {
+  if (process.platform === 'win32') {
+    await execFileAsync('explorer.exe', [folderPath]).catch(() => {
+      // explorer.exe returns exit code 1 even on success — ignore
+    });
+  } else if (process.platform === 'darwin') {
+    await execFileAsync('open', [folderPath]);
+  } else {
+    await execFileAsync('xdg-open', [folderPath]);
+  }
+}

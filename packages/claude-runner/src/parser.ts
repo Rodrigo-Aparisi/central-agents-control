@@ -76,8 +76,16 @@ export function mapRawToEvent(raw: unknown): ParserOutput {
     case 'message': {
       const isAssistantRole = r.role === undefined || r.role === 'assistant';
       if (!isAssistantRole) break;
-      const content = extractTextContent(r.content);
-      const stopReason = typeof r.stop_reason === 'string' ? r.stop_reason : undefined;
+      // CLI stream-json nests content inside r.message: {"type":"assistant","message":{"content":[...],...}}
+      const msgRecord = isRecord(r.message) ? r.message : null;
+      const contentSource = r.content ?? (msgRecord ? msgRecord.content : undefined);
+      const content = extractTextContent(contentSource);
+      const stopReason =
+        typeof r.stop_reason === 'string'
+          ? r.stop_reason
+          : msgRecord && typeof msgRecord.stop_reason === 'string'
+            ? msgRecord.stop_reason
+            : undefined;
       return {
         kind: 'event',
         type: 'assistant_message',
@@ -85,6 +93,56 @@ export function mapRawToEvent(raw: unknown): ParserOutput {
           type: 'assistant_message',
           content,
           ...(stopReason ? { stopReason } : {}),
+        },
+        timestamp: now,
+      };
+    }
+
+    case 'user': {
+      // CLI wraps tool results: {"type":"user","message":{"role":"user","content":[{"type":"tool_result",...}],...}}
+      const msgRecord = isRecord(r.message) ? r.message : null;
+      const contents = msgRecord && Array.isArray(msgRecord.content) ? msgRecord.content : [];
+      for (const item of contents) {
+        if (!isRecord(item) || item.type !== 'tool_result') continue;
+        const rawContent = item.content;
+        let outputStr: string;
+        if (typeof rawContent === 'string') {
+          outputStr = rawContent;
+        } else if (Array.isArray(rawContent)) {
+          outputStr = rawContent
+            .map((c) => (isRecord(c) && typeof c.text === 'string' ? c.text : ''))
+            .join('');
+        } else {
+          outputStr = '';
+        }
+        return {
+          kind: 'event',
+          type: 'tool_result',
+          payload: {
+            type: 'tool_result',
+            tool: 'unknown',
+            output: truncate(outputStr, MAX_TOOL_OUTPUT_BYTES),
+            isError: item.is_error === true,
+          },
+          timestamp: now,
+        };
+      }
+      break;
+    }
+
+    case 'result': {
+      // Final result event from CLI - contains cumulative token usage
+      const usageRaw = isRecord(r.usage) ? r.usage : null;
+      if (!usageRaw) break;
+      return {
+        kind: 'event',
+        type: 'usage',
+        payload: {
+          type: 'usage',
+          inputTokens: toUint(usageRaw.input_tokens),
+          outputTokens: toUint(usageRaw.output_tokens),
+          cacheReadTokens: toUint(usageRaw.cache_read_input_tokens),
+          cacheWriteTokens: toUint(usageRaw.cache_creation_input_tokens),
         },
         timestamp: now,
       };
@@ -200,14 +258,59 @@ export async function* parseStream(stream: Readable): AsyncGenerator<ParserOutpu
   const lines = stream.pipe(split2());
   try {
     for await (const line of lines as AsyncIterable<string>) {
-      if (line.length === 0) continue;
-      yield parseLine(line);
+      const trimmed = line.trim();
+      if (trimmed.length === 0) continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (err) {
+        yield {
+          kind: 'parse-error',
+          raw: truncate(trimmed, MAX_RAW_LINE_BYTES),
+          reason: err instanceof Error ? err.message : 'JSON parse failed',
+        };
+        continue;
+      }
+      yield mapRawToEvent(parsed);
+      // Claude CLI embeds tool_use blocks inside assistant message content arrays.
+      // Extract and emit them separately so workers can detect file operations.
+      yield* extractEmbeddedToolUses(parsed);
     }
   } finally {
     if (typeof (lines as { destroy?: () => void }).destroy === 'function') {
       (lines as { destroy: () => void }).destroy();
     }
   }
+}
+
+function extractEmbeddedToolUses(raw: unknown): ParserOutput[] {
+  if (typeof raw !== 'object' || raw === null) return [];
+  const r = raw as ClaudeCliEventShape;
+  const cliType = typeof r.type === 'string' ? r.type : '';
+  if (cliType !== 'assistant' && cliType !== 'assistant_message' && cliType !== 'message') return [];
+  const isAssistantRole = r.role === undefined || r.role === 'assistant';
+  if (!isAssistantRole) return [];
+  const msgRecord = isRecord(r.message) ? r.message : null;
+  const contentArr: unknown = r.content ?? (msgRecord ? msgRecord.content : undefined);
+  if (!Array.isArray(contentArr)) return [];
+  const now = new Date().toISOString();
+  const events: ParserOutput[] = [];
+  for (const item of contentArr) {
+    if (!isRecord(item) || item.type !== 'tool_use') continue;
+    const tool = normalizeTool(item.name ?? item.tool ?? item.tool_name);
+    const input = isRecord(item.input) ? item.input : {};
+    if (tool && !TOOL_USE_WHITELIST.has(tool.toLowerCase())) {
+      events.push({ kind: 'suspicious', tool, raw: item });
+      continue;
+    }
+    events.push({
+      kind: 'event',
+      type: 'tool_use',
+      payload: { type: 'tool_use', tool: tool ?? 'unknown', input },
+      timestamp: now,
+    });
+  }
+  return events;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

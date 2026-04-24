@@ -6,7 +6,7 @@ import {
   validatorCompiler,
 } from 'fastify-type-provider-zod';
 import type { Config } from './config';
-import { buildLoggerOptions } from './lib/logger';
+import { buildDevLogger, buildLoggerOptions } from './lib/logger';
 import { configPlugin } from './plugins/config';
 import { dbPlugin } from './plugins/db';
 import { errorHandlerPlugin } from './plugins/error-handler';
@@ -28,14 +28,19 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
-  const app = Fastify({
-    logger: buildLoggerOptions(opts.config),
+  const sharedOpts = {
     disableRequestLogging: false,
-    genReqId: (req) =>
+    genReqId: (req: { headers: Record<string, string | string[] | undefined> }) =>
       (req.headers['x-request-id'] as string | undefined) ??
       `req_${Math.random().toString(36).slice(2, 10)}`,
     bodyLimit: 2 * 1024 * 1024,
-  }).withTypeProvider<ZodTypeProvider>();
+  } as const;
+
+  const app = (
+    opts.config.NODE_ENV === 'development'
+      ? Fastify({ ...sharedOpts, loggerInstance: buildDevLogger(opts.config) })
+      : Fastify({ ...sharedOpts, logger: buildLoggerOptions(opts.config) })
+  ).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

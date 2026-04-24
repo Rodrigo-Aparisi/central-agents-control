@@ -37,9 +37,12 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['content-type'] = 'application/json';
+
   const init: RequestInit = {
     method,
-    headers: { 'content-type': 'application/json' },
+    headers,
     credentials: 'same-origin',
   };
   if (body !== undefined) init.body = JSON.stringify(body);
@@ -78,6 +81,7 @@ export const api = {
     update: (id: string, input: UpdateProjectInput) =>
       request<Project>('PUT', `/v1/projects/${id}`, input),
     delete: (id: string) => request<void>('DELETE', `/v1/projects/${id}`),
+    openFolder: (id: string) => request<void>('POST', `/v1/projects/${id}/open-folder`),
   },
 
   // runs

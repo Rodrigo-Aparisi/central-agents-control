@@ -1,7 +1,12 @@
 import { desc, eq, lt } from 'drizzle-orm';
 import type { Db } from '../client';
+import { isoTs } from '../lib/dates';
 import { newId } from '../lib/uuid';
 import { type ProjectInsert, type ProjectRow, projects } from '../schema/projects';
+
+function norm(row: ProjectRow): ProjectRow {
+  return { ...row, createdAt: isoTs(row.createdAt), updatedAt: isoTs(row.updatedAt) };
+}
 
 export interface ListOptions {
   cursor?: string;
@@ -12,12 +17,13 @@ export function makeProjectsRepo(db: Db) {
   return {
     async findById(id: string): Promise<ProjectRow | null> {
       const rows = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
-      return rows[0] ?? null;
+      return rows[0] ? norm(rows[0]) : null;
     },
 
     async list({ cursor, limit }: ListOptions): Promise<ProjectRow[]> {
       const where = cursor ? lt(projects.id, cursor) : undefined;
-      return db.select().from(projects).where(where).orderBy(desc(projects.id)).limit(limit);
+      const rows = await db.select().from(projects).where(where).orderBy(desc(projects.id)).limit(limit);
+      return rows.map(norm);
     },
 
     async insert(
@@ -30,7 +36,7 @@ export function makeProjectsRepo(db: Db) {
         .returning();
       const row = rows[0];
       if (!row) throw new Error('insert returned no rows');
-      return row;
+      return norm(row);
     },
 
     async update(id: string, patch: Partial<ProjectInsert>): Promise<ProjectRow | null> {
@@ -39,7 +45,7 @@ export function makeProjectsRepo(db: Db) {
         .set({ ...patch, updatedAt: new Date().toISOString() })
         .where(eq(projects.id, id))
         .returning();
-      return rows[0] ?? null;
+      return rows[0] ? norm(rows[0]) : null;
     },
 
     async delete(id: string): Promise<boolean> {

@@ -19,7 +19,7 @@ export function buildClaudeArgs({ prompt, params }: BuildArgsOptions): string[] 
     extra.push(flag);
   }
 
-  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'];
   if (params.model && !extra.includes('--model')) {
     args.push('--model', params.model);
   }

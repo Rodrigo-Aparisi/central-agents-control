@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ArtifactOperation, RunParams, RunStatus, RunUsage } from './run';
+import { ArtifactOperation, ProjectClaudeConfig, RunParams, RunStatus, RunUsage } from './run';
 
 export const UuidV7 = z.string().uuid();
 export type UuidV7 = z.infer<typeof UuidV7>;
@@ -17,7 +17,9 @@ export const CreateProjectInput = z.object({
 });
 export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
 
-export const UpdateProjectInput = CreateProjectInput.partial();
+export const UpdateProjectInput = CreateProjectInput.partial().extend({
+  claudeConfig: ProjectClaudeConfig.nullable().optional(),
+});
 export type UpdateProjectInput = z.infer<typeof UpdateProjectInput>;
 
 export const Project = z.object({

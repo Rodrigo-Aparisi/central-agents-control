@@ -9,7 +9,7 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "dev": "pnpm -r --parallel --stream --filter \"./apps/*\" dev",
     "build": "pnpm -r build",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

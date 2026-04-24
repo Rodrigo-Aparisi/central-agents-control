@@ -130,7 +130,7 @@ function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="files">
-          <FileBrowser projectId={p.id} />
+          <FileBrowser projectId={p.id} rootPath={p.rootPath} />
         </TabsContent>
 
         <TabsContent value="settings">
@@ -194,15 +194,15 @@ function SettingsTab({ projectId }: { projectId: string }) {
       if (model.trim().length > 0) claudeConfig.model = model.trim();
       if (allowedFlags.size > 0) claudeConfig.allowedFlags = Array.from(allowedFlags).sort();
 
-      const parsed = UpdateProjectInput.parse({
+      const parsed = UpdateProjectInput.safeParse({
         name,
         description: description || undefined,
-        // claudeConfig isn't in UpdateProjectInput, but the API accepts extra fields via update()
+        claudeConfig: Object.keys(claudeConfig).length > 0 ? claudeConfig : null,
       });
-      return api.projects.update(projectId, {
-        ...parsed,
-        ...(Object.keys(claudeConfig).length > 0 ? { claudeConfig } : {}),
-      } as never);
+      if (!parsed.success) {
+        throw new Error(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+      }
+      return api.projects.update(projectId, parsed.data);
     },
     onSuccess: () => {
       toast.success('Proyecto actualizado');
