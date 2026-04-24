@@ -27,8 +27,8 @@ const ConfigSchema = z.object({
   ENABLE_WORKERS: BooleanFromString.default(true),
   ANTHROPIC_API_KEY: z.string().optional(),
 
-  // Auth / security
-  JWT_SECRET: z.string().min(32),
+  // Auth / security — JWT_SECRET defaults to a dev-only placeholder (never used when AUTH_ENABLED=false)
+  JWT_SECRET: z.string().min(32).default('dev-only-insecure-secret-change-in-production!!'),
   JWT_EXPIRES_IN: z.coerce.number().int().positive().default(900), // 15 min in seconds
   REFRESH_TOKEN_EXPIRES_DAYS: z.coerce.number().int().positive().default(30),
   ALLOWED_ORIGINS: z.string().default(''), // comma-separated list
