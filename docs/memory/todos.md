@@ -107,13 +107,14 @@ Estado: `[ ]` pendiente · `[~]` en progreso · `[x]` completado
 
 ---
 
-## Fase 7 — v2 *(pendiente de completar v1)*
+## Fase 7 — v2 *(completado 2026-04-24)*
 
-- [ ] Docker Compose completo (web + api + postgres + redis + nginx)
-- [ ] Auth JWT + bcrypt + refresh token
-- [ ] RBAC admin/viewer
-- [ ] Gestión de usuarios (admin panel)
-- [ ] Audit log persistido en DB
-- [ ] Rate limiting (`@fastify/rate-limit`)
-- [ ] CORS + Helmet
-- [ ] TLS self-signed para intranet
+- [x] Docker Compose completo (web + api + postgres + redis + nginx) — `docker-compose.prod.yml` + Dockerfiles + `infra/nginx/`
+- [x] Auth JWT + bcrypt + refresh token — `POST /v1/auth/{login,refresh,logout}`, httpOnly cookie, SHA-256 token hash
+- [x] RBAC admin/viewer — `authPlugin` con `requireAuth` / `requireRole`, aplicado a todas las rutas
+- [x] Gestión de usuarios (admin panel) — `GET/POST/PUT/DELETE /v1/admin/users` + UI `/admin/users`
+- [x] Audit log persistido en DB — tabla `audit_events` + `/admin/audit` UI con paginación
+- [x] Rate limiting (`@fastify/rate-limit`) — 60 req/min general, 10/min en `/v1/auth/login`
+- [x] CORS + Helmet — `@fastify/cors` con whitelist, `@fastify/helmet` con CSP (unsafe-eval para Monaco)
+- [x] TLS self-signed para intranet — `infra/generate-certs.sh` + nginx SSL config
+- [x] `AUTH_ENABLED=false` flag para modo dev sin auth (backward-compat v1)

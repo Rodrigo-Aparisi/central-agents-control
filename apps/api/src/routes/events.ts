@@ -21,7 +21,10 @@ export const eventRoutes = fp(
 
     app.get(
       '/v1/runs/:id/events',
-      { schema: { params: Params, querystring: Query, response: { 200: ListResponse } } },
+      {
+        schema: { params: Params, querystring: Query, response: { 200: ListResponse } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const run = await fastify.db.runs.findById(req.params.id);
         if (!run) throw AppError.notFound(`run ${req.params.id} not found`);

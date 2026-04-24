@@ -6,13 +6,7 @@ const SETTINGS_FILENAME = path.join('.claude', 'settings.json');
 const DEFAULT_SETTINGS = {
   permissions: {
     allow: ['Read(**)', 'Write(**)', 'Edit(**)', 'Bash(*)', 'Glob(**)', 'Grep(**)', 'Task(**)'],
-    deny: [
-      'Read(.env*)',
-      'Bash(rm -rf*)',
-      'Bash(sudo*)',
-      'Bash(curl*)',
-      'Bash(git push --force*)',
-    ],
+    deny: ['Read(.env*)', 'Bash(rm -rf*)', 'Bash(sudo*)', 'Bash(curl*)', 'Bash(git push --force*)'],
   },
 };
 
@@ -31,5 +25,5 @@ export async function ensureProjectClaudeSettings(projectRoot: string): Promise<
   }
 
   await mkdir(path.join(projectRoot, '.claude'), { recursive: true });
-  await writeFile(settingsPath, JSON.stringify(DEFAULT_SETTINGS, null, 2) + '\n', 'utf8');
+  await writeFile(settingsPath, `${JSON.stringify(DEFAULT_SETTINGS, null, 2)}\n`, 'utf8');
 }

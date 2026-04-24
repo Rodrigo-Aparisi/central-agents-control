@@ -15,6 +15,13 @@
       "when": 1776977732324,
       "tag": "0001_narrow_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777021012171,
+      "tag": "0002_quick_iron_patriot",
+      "breakpoints": true
     }
   ]
 }

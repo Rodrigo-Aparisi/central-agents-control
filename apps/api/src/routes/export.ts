@@ -14,7 +14,10 @@ export const exportRoutes = fp(
 
     app.get(
       '/v1/runs/:id/export',
-      { schema: { params: Params, querystring: Query } },
+      {
+        schema: { params: Params, querystring: Query },
+        preHandler: [fastify.requireAuth],
+      },
       async (req, reply) => {
         const run = await fastify.db.runs.findById(req.params.id);
         if (!run) throw AppError.notFound(`run ${req.params.id} not found`);

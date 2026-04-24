@@ -287,7 +287,8 @@ function extractEmbeddedToolUses(raw: unknown): ParserOutput[] {
   if (typeof raw !== 'object' || raw === null) return [];
   const r = raw as ClaudeCliEventShape;
   const cliType = typeof r.type === 'string' ? r.type : '';
-  if (cliType !== 'assistant' && cliType !== 'assistant_message' && cliType !== 'message') return [];
+  if (cliType !== 'assistant' && cliType !== 'assistant_message' && cliType !== 'message')
+    return [];
   const isAssistantRole = r.role === undefined || r.role === 'assistant';
   if (!isAssistantRole) return [];
   const msgRecord = isRecord(r.message) ? r.message : null;

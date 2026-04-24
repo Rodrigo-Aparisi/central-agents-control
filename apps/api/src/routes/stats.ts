@@ -16,7 +16,10 @@ export const statsRoutes = fp(
 
     app.get(
       '/v1/stats/global',
-      { schema: { querystring: Query, response: { 200: GlobalStatsResponse } } },
+      {
+        schema: { querystring: Query, response: { 200: GlobalStatsResponse } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const since = daysAgo(req.query.days);
         const [days, totals, topRaw] = await Promise.all([
@@ -50,6 +53,7 @@ export const statsRoutes = fp(
           querystring: Query,
           response: { 200: ProjectStatsResponse },
         },
+        preHandler: [fastify.requireAuth],
       },
       async (req) => {
         const project = await fastify.db.projects.findById(req.params.id);

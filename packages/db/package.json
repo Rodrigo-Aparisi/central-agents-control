@@ -17,16 +17,19 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx --env-file=../../.env scripts/migrate.ts",
     "studio": "drizzle-kit studio",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "create-admin": "tsx --env-file=../../.env scripts/create-admin.ts"
   },
   "dependencies": {
     "@cac/shared": "workspace:*",
+    "bcrypt": "^5.1.1",
     "drizzle-orm": "^0.38.3",
     "postgres": "^3.4.5",
     "uuidv7": "^1.0.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
     "@types/node": "^22.10.5",
     "drizzle-kit": "^0.30.1",
     "tsx": "^4.19.2",

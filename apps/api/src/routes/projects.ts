@@ -31,7 +31,10 @@ export const projectRoutes = fp(
 
     app.get(
       '/v1/projects',
-      { schema: { querystring: CursorPagination, response: { 200: ProjectList } } },
+      {
+        schema: { querystring: CursorPagination, response: { 200: ProjectList } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const { cursor, limit } = req.query;
         const rows = await fastify.db.projects.list({ cursor, limit });
@@ -43,7 +46,10 @@ export const projectRoutes = fp(
 
     app.post(
       '/v1/projects',
-      { schema: { body: CreateProjectInput, response: { 201: Project } } },
+      {
+        schema: { body: CreateProjectInput, response: { 201: Project } },
+        preHandler: [fastify.requireRole('admin')],
+      },
       async (req, reply) => {
         const { name, rootPath, description } = req.body;
         const realRoot = ensureWithinProjectsRoot(rootPath, fastify.config.resolvedProjectsRoot);
@@ -61,7 +67,10 @@ export const projectRoutes = fp(
 
     app.get(
       '/v1/projects/:id',
-      { schema: { params: IdParams, response: { 200: Project } } },
+      {
+        schema: { params: IdParams, response: { 200: Project } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const row = await fastify.db.projects.findById(req.params.id);
         if (!row) throw AppError.notFound(`project ${req.params.id} not found`);
@@ -71,7 +80,10 @@ export const projectRoutes = fp(
 
     app.put(
       '/v1/projects/:id',
-      { schema: { params: IdParams, body: UpdateProjectInput, response: { 200: Project } } },
+      {
+        schema: { params: IdParams, body: UpdateProjectInput, response: { 200: Project } },
+        preHandler: [fastify.requireRole('admin')],
+      },
       async (req) => {
         const patch: Record<string, unknown> = { ...req.body };
         if (typeof req.body.rootPath === 'string') {
@@ -88,7 +100,10 @@ export const projectRoutes = fp(
 
     app.delete(
       '/v1/projects/:id',
-      { schema: { params: IdParams, response: { 204: z.null() } } },
+      {
+        schema: { params: IdParams, response: { 204: z.null() } },
+        preHandler: [fastify.requireRole('admin')],
+      },
       async (req, reply) => {
         const deleted = await fastify.db.projects.delete(req.params.id);
         if (!deleted) throw AppError.notFound(`project ${req.params.id} not found`);
@@ -98,7 +113,10 @@ export const projectRoutes = fp(
 
     app.post(
       '/v1/projects/:id/open-folder',
-      { schema: { params: IdParams, response: { 204: z.null() } } },
+      {
+        schema: { params: IdParams, response: { 204: z.null() } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req, reply) => {
         const row = await fastify.db.projects.findById(req.params.id);
         if (!row) throw AppError.notFound(`project ${req.params.id} not found`);

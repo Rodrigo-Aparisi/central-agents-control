@@ -1,7 +1,11 @@
+import { useAuthStore } from '@/stores/auth';
 import type {
   ApiErrorBody,
   Artifact,
+  AuditEventRow,
+  AuthTokensResponse,
   CreateProjectInput,
+  CreateUserInput,
   ExportFormat,
   FileContentResponse,
   GlobalStatsResponse,
@@ -9,6 +13,7 @@ import type {
   LaunchRunInput,
   LaunchRunResponse,
   ListFilesResponse,
+  LoginInput,
   Project,
   ProjectStatsResponse,
   Run,
@@ -16,6 +21,8 @@ import type {
   RunGraphResponse,
   RunStatus,
   UpdateProjectInput,
+  UpdateUserInput,
+  UserRow,
 } from '@cac/shared';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
@@ -40,14 +47,25 @@ async function request<T>(
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['content-type'] = 'application/json';
 
+  const token = useAuthStore.getState().accessToken;
+  if (token) headers.authorization = `Bearer ${token}`;
+
   const init: RequestInit = {
     method,
     headers,
-    credentials: 'same-origin',
+    credentials: 'include',
   };
   if (body !== undefined) init.body = JSON.stringify(body);
 
   const res = await fetch(`${BASE_URL}${path}`, init);
+
+  if (res.status === 401) {
+    useAuthStore.getState().clearAuth();
+    window.location.href = '/login';
+    // Return a never-resolving promise since we're redirecting
+    return new Promise<never>(() => {});
+  }
+
   if (res.status === 204) return undefined as T;
 
   const text = await res.text();
@@ -68,6 +86,31 @@ async function request<T>(
 export const api = {
   // health
   health: () => request<HealthResponse>('GET', '/v1/health'),
+
+  // auth
+  auth: {
+    login: (input: LoginInput) => request<AuthTokensResponse>('POST', '/v1/auth/login', input),
+    refresh: () => request<AuthTokensResponse>('POST', '/v1/auth/refresh'),
+    logout: () => request<void>('POST', '/v1/auth/logout'),
+  },
+
+  // admin
+  admin: {
+    users: {
+      list: () => request<{ items: UserRow[] }>('GET', '/v1/admin/users'),
+      create: (input: CreateUserInput) => request<UserRow>('POST', '/v1/admin/users', input),
+      updateRole: (id: string, input: UpdateUserInput) =>
+        request<UserRow>('PUT', `/v1/admin/users/${id}`, input),
+      delete: (id: string) => request<void>('DELETE', `/v1/admin/users/${id}`),
+    },
+    audit: {
+      list: (params?: { userId?: string; cursor?: string; limit?: number }) =>
+        request<{ items: AuditEventRow[]; nextCursor: string | null }>(
+          'GET',
+          buildQuery('/v1/admin/audit', params),
+        ),
+    },
+  },
 
   // projects
   projects: {

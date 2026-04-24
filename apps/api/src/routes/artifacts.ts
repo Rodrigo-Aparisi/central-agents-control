@@ -14,7 +14,10 @@ export const artifactRoutes = fp(
 
     app.get(
       '/v1/runs/:id/artifacts',
-      { schema: { params: Params, response: { 200: ListResponse } } },
+      {
+        schema: { params: Params, response: { 200: ListResponse } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const run = await fastify.db.runs.findById(req.params.id);
         if (!run) throw AppError.notFound(`run ${req.params.id} not found`);

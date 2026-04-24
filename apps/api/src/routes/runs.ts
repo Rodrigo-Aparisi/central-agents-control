@@ -34,7 +34,10 @@ export const runRoutes = fp(
 
     app.get(
       '/v1/runs',
-      { schema: { querystring: ListQuery, response: { 200: RunList } } },
+      {
+        schema: { querystring: ListQuery, response: { 200: RunList } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const { cursor, limit, projectId, status } = req.query;
         const rows = await fastify.db.runs.list({ cursor, limit, projectId, status });
@@ -52,6 +55,7 @@ export const runRoutes = fp(
           querystring: CursorPagination,
           response: { 200: RunList },
         },
+        preHandler: [fastify.requireAuth],
       },
       async (req) => {
         const { cursor, limit } = req.query;
@@ -68,7 +72,10 @@ export const runRoutes = fp(
 
     app.get(
       '/v1/runs/:id',
-      { schema: { params: RunIdParams, response: { 200: Run } } },
+      {
+        schema: { params: RunIdParams, response: { 200: Run } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const row = await fastify.db.runs.findById(req.params.id);
         if (!row) throw AppError.notFound(`run ${req.params.id} not found`);
@@ -84,6 +91,7 @@ export const runRoutes = fp(
           body: LaunchRunInput,
           response: { 202: LaunchRunResponse },
         },
+        preHandler: [fastify.requireRole('admin')],
       },
       async (req, reply) => {
         const project = await fastify.db.projects.findById(req.params.id);
@@ -117,7 +125,10 @@ export const runRoutes = fp(
 
     app.post(
       '/v1/runs/:id/cancel',
-      { schema: { params: RunIdParams, response: { 202: Run } } },
+      {
+        schema: { params: RunIdParams, response: { 202: Run } },
+        preHandler: [fastify.requireRole('admin')],
+      },
       async (req, reply) => {
         const run = await fastify.db.runs.findById(req.params.id);
         if (!run) throw AppError.notFound(`run ${req.params.id} not found`);
@@ -153,6 +164,7 @@ export const runRoutes = fp(
           body: z.object({ prompt: z.string().min(1).max(50_000).optional() }).optional(),
           response: { 202: LaunchRunResponse },
         },
+        preHandler: [fastify.requireRole('admin')],
       },
       async (req, reply) => {
         const source = await fastify.db.runs.findById(req.params.id);

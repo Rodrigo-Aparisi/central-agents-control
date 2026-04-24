@@ -44,3 +44,8 @@ coverage/
 playwright-report/
 test-results/
 
+# TLS certificates (generated locally, never commit)
+infra/certs/*.crt
+infra/certs/*.key
+infra/certs/*.pem
+

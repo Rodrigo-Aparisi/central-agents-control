@@ -12,7 +12,10 @@ export const runGraphRoutes = fp(
 
     app.get(
       '/v1/projects/:id/run-graph',
-      { schema: { params: Params, response: { 200: RunGraphResponse } } },
+      {
+        schema: { params: Params, response: { 200: RunGraphResponse } },
+        preHandler: [fastify.requireAuth],
+      },
       async (req) => {
         const project = await fastify.db.projects.findById(req.params.id);
         if (!project) throw AppError.notFound(`project ${req.params.id} not found`);

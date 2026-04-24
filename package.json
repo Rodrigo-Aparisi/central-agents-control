@@ -18,7 +18,8 @@
     "test": "pnpm -r test",
     "db:generate": "pnpm --filter @cac/db generate",
     "db:migrate": "pnpm --filter @cac/db migrate",
-    "db:studio": "pnpm --filter @cac/db studio"
+    "db:studio": "pnpm --filter @cac/db studio",
+    "db:create-admin": "pnpm --filter @cac/db create-admin"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

@@ -5,9 +5,7 @@
  * .toISOString() throws RangeError.  Normalize before converting.
  */
 function normalizePgTs(ts: string): string {
-  return ts
-    .replace(' ', 'T')
-    .replace(/([+-]\d{2})$/, '$1:00');
+  return ts.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00');
 }
 
 export function isoTs(ts: string): string {

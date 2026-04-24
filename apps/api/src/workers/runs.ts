@@ -203,14 +203,14 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
       if (ev.payload.type === 'tool_use') {
         const { tool, input } = ev.payload;
         const toolLower = tool.toLowerCase();
-        const filePath = typeof input['file_path'] === 'string' ? input['file_path'] : null;
+        const filePath = typeof input.file_path === 'string' ? input.file_path : null;
         if (filePath) {
           if (toolLower === 'write') {
-            const content = typeof input['content'] === 'string' ? input['content'] : null;
+            const content = typeof input.content === 'string' ? input.content : null;
             if (!artifactOps.has(filePath)) artifactOps.set(filePath, 'created');
             artifactContents.set(filePath, content);
           } else if (toolLower === 'edit') {
-            const newStr = typeof input['new_string'] === 'string' ? input['new_string'] : null;
+            const newStr = typeof input.new_string === 'string' ? input.new_string : null;
             if (!artifactOps.has(filePath)) artifactOps.set(filePath, 'modified');
             artifactContents.set(filePath, newStr);
           } else if (toolLower === 'multiedit') {

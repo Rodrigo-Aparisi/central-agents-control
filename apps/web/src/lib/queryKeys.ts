@@ -11,4 +11,8 @@ export const qk = {
   run: (id: string) => ['cac', 'runs', id] as const,
   runEvents: (id: string) => ['cac', 'runs', id, 'events'] as const,
   runArtifacts: (id: string) => ['cac', 'runs', id, 'artifacts'] as const,
+
+  // admin
+  adminUsers: () => ['cac', 'admin', 'users'] as const,
+  adminAudit: (params?: { userId?: string }) => ['cac', 'admin', 'audit', params ?? {}] as const,
 } as const;

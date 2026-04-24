@@ -19,3 +19,7 @@ export const artifactOperationEnum = pgEnum('artifact_operation', [
   'modified',
   'deleted',
 ]);
+
+export const USER_ROLES = ['admin', 'viewer'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+export const userRoleEnum = pgEnum('user_role', USER_ROLES);

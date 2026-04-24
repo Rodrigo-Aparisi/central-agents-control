@@ -26,6 +26,14 @@ const ConfigSchema = z.object({
 
   ENABLE_WORKERS: BooleanFromString.default(true),
   ANTHROPIC_API_KEY: z.string().optional(),
+
+  // Auth / security
+  JWT_SECRET: z.string().min(32),
+  JWT_EXPIRES_IN: z.coerce.number().int().positive().default(900), // 15 min in seconds
+  REFRESH_TOKEN_EXPIRES_DAYS: z.coerce.number().int().positive().default(30),
+  ALLOWED_ORIGINS: z.string().default(''), // comma-separated list
+  RATE_LIMIT_ENABLED: BooleanFromString.default(true),
+  AUTH_ENABLED: BooleanFromString.default(true), // false = skip auth (dev convenience)
 });
 
 export type Config = z.infer<typeof ConfigSchema> & {

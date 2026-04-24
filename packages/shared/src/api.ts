@@ -167,3 +167,51 @@ export type FileContentResponse = z.infer<typeof FileContentResponse>;
 
 export const ExportFormat = z.enum(['json', 'markdown']);
 export type ExportFormat = z.infer<typeof ExportFormat>;
+
+// Auth
+export const LoginInput = z.object({
+  email: z.string().email(),
+  password: z.string().min(1).max(1024),
+});
+export type LoginInput = z.infer<typeof LoginInput>;
+
+export const AuthTokensResponse = z.object({
+  accessToken: z.string(),
+  userId: UuidV7,
+  role: z.enum(['admin', 'viewer']),
+  expiresIn: z.number().int(), // seconds
+});
+export type AuthTokensResponse = z.infer<typeof AuthTokensResponse>;
+
+export const UserRow = z.object({
+  id: UuidV7,
+  email: z.string().email(),
+  role: z.enum(['admin', 'viewer']),
+  createdAt: z.string().datetime({ offset: true }),
+  lastLoginAt: z.string().datetime({ offset: true }).nullable(),
+});
+export type UserRow = z.infer<typeof UserRow>;
+
+export const CreateUserInput = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(1024),
+  role: z.enum(['admin', 'viewer']).default('viewer'),
+});
+export type CreateUserInput = z.infer<typeof CreateUserInput>;
+
+export const UpdateUserInput = z.object({
+  role: z.enum(['admin', 'viewer']),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserInput>;
+
+export const AuditEventRow = z.object({
+  id: UuidV7,
+  userId: UuidV7.nullable(),
+  action: z.string(),
+  resource: z.string(),
+  resourceId: z.string().nullable(),
+  detail: z.string().nullable(),
+  ip: z.string().nullable(),
+  timestamp: z.string().datetime({ offset: true }),
+});
+export type AuditEventRow = z.infer<typeof AuditEventRow>;

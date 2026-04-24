@@ -22,7 +22,12 @@ export function makeProjectsRepo(db: Db) {
 
     async list({ cursor, limit }: ListOptions): Promise<ProjectRow[]> {
       const where = cursor ? lt(projects.id, cursor) : undefined;
-      const rows = await db.select().from(projects).where(where).orderBy(desc(projects.id)).limit(limit);
+      const rows = await db
+        .select()
+        .from(projects)
+        .where(where)
+        .orderBy(desc(projects.id))
+        .limit(limit);
       return rows.map(norm);
     },
 

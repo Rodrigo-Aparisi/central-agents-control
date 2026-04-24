@@ -14,11 +14,16 @@ afterAll(() => {
   rmSync(projectsRoot, { recursive: true, force: true });
 });
 
+const BASE_ENV = {
+  DATABASE_URL: 'postgres://cac:cac@localhost:5432/cac',
+  REDIS_URL: 'redis://localhost:6379',
+  JWT_SECRET: 'test-secret-that-is-at-least-32-chars!!',
+};
+
 describe('loadConfig', () => {
   it('parses a valid env', () => {
     const cfg = loadConfig({
-      DATABASE_URL: 'postgres://cac:cac@localhost:5432/cac',
-      REDIS_URL: 'redis://localhost:6379',
+      ...BASE_ENV,
       PROJECTS_ROOT: projectsRoot,
     });
     expect(cfg.NODE_ENV).toBe('development');
@@ -30,6 +35,7 @@ describe('loadConfig', () => {
     expect(() =>
       loadConfig({
         REDIS_URL: 'redis://localhost:6379',
+        JWT_SECRET: BASE_ENV.JWT_SECRET,
         PROJECTS_ROOT: projectsRoot,
       }),
     ).toThrow(/DATABASE_URL/);
@@ -38,8 +44,7 @@ describe('loadConfig', () => {
   it('rejects a non-existent PROJECTS_ROOT', () => {
     expect(() =>
       loadConfig({
-        DATABASE_URL: 'postgres://cac:cac@localhost:5432/cac',
-        REDIS_URL: 'redis://localhost:6379',
+        ...BASE_ENV,
         PROJECTS_ROOT: path.join(projectsRoot, 'missing-dir-xyz'),
       }),
     ).toThrow(/does not exist/);
@@ -47,8 +52,7 @@ describe('loadConfig', () => {
 
   it('coerces ENABLE_WORKERS string "false" to boolean', () => {
     const cfg = loadConfig({
-      DATABASE_URL: 'postgres://cac:cac@localhost:5432/cac',
-      REDIS_URL: 'redis://localhost:6379',
+      ...BASE_ENV,
       PROJECTS_ROOT: projectsRoot,
       ENABLE_WORKERS: 'false',
     });

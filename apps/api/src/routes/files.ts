@@ -41,6 +41,7 @@ export const fileRoutes = fp(
           querystring: ListQuery,
           response: { 200: ListFilesResponse },
         },
+        preHandler: [fastify.requireAuth],
       },
       async (req) => {
         const project = await fastify.db.projects.findById(req.params.id);
@@ -82,6 +83,7 @@ export const fileRoutes = fp(
           querystring: ContentQuery,
           response: { 200: FileContentResponse },
         },
+        preHandler: [fastify.requireAuth],
       },
       async (req) => {
         const project = await fastify.db.projects.findById(req.params.id);

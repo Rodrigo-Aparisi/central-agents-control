@@ -196,6 +196,9 @@ vi.mock('../src/plugins/db', async () => {
           listByRun: async (runId: string) => state.artifacts.filter((a) => a.runId === runId),
           insertMany: async () => [],
         } as never,
+        users: {} as never,
+        refreshTokens: {} as never,
+        auditEvents: {} as never,
         transaction: (async () => undefined) as never,
         ping: async () => true,
         close: async () => {},
@@ -277,6 +280,38 @@ vi.mock('../src/plugins/socketio', async () => {
   return { socketIoPlugin: plugin };
 });
 
+// Auth, cors and rate-limit plugins are no-ops in tests (AUTH_ENABLED=false).
+vi.mock('../src/plugins/auth', async () => {
+  const fp = (await import('fastify-plugin')).default;
+  const noop = async () => {};
+  const plugin = fp(
+    async (fastify) => {
+      fastify.decorate('requireAuth', noop as never);
+      fastify.decorate('requireRole', () => noop as never);
+    },
+    { name: 'auth' },
+  );
+  return { authPlugin: plugin };
+});
+
+vi.mock('../src/plugins/cors', async () => {
+  const fp = (await import('fastify-plugin')).default;
+  const plugin = fp(async () => {}, { name: 'cors' });
+  return { corsPlugin: plugin };
+});
+
+vi.mock('../src/plugins/rate-limit', async () => {
+  const fp = (await import('fastify-plugin')).default;
+  const plugin = fp(async () => {}, { name: 'rate-limit' });
+  return { rateLimitPlugin: plugin };
+});
+
+// @fastify/cookie must be a no-op too (not decorated, just registered).
+vi.mock('@fastify/cookie', async () => {
+  const fp = (await import('fastify-plugin')).default;
+  return { default: fp(async () => {}, { name: 'cookie' }) };
+});
+
 const projectsRoot = mkdtempSync(path.join(tmpdir(), 'cac-api-'));
 const validRoot = path.join(projectsRoot, 'p1');
 
@@ -293,6 +328,13 @@ const cfg: Config = {
   MAX_CONCURRENT_RUNS: 1,
   ENABLE_WORKERS: false,
   resolvedProjectsRoot: projectsRoot,
+  // Auth / security
+  JWT_SECRET: 'test-secret-at-least-32-chars-long!!',
+  JWT_EXPIRES_IN: 900,
+  REFRESH_TOKEN_EXPIRES_DAYS: 30,
+  ALLOWED_ORIGINS: '',
+  RATE_LIMIT_ENABLED: false,
+  AUTH_ENABLED: false, // skip JWT verification in unit tests
 };
 
 let app: Awaited<ReturnType<typeof buildApp>>;
