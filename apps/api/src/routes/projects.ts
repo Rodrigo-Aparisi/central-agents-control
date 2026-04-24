@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
 import { promisify } from 'node:util';
 import {
   AppError,
@@ -8,6 +9,7 @@ import {
   UpdateProjectInput,
   UuidV7,
 } from '@cac/shared';
+import { simpleGit } from 'simple-git';
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -51,8 +53,32 @@ export const projectRoutes = fp(
         preHandler: [fastify.requireRole('admin')],
       },
       async (req, reply) => {
-        const { name, rootPath, description } = req.body;
+        const { name, rootPath, description, gitUrl } = req.body;
         const realRoot = ensureWithinProjectsRoot(rootPath, fastify.config.resolvedProjectsRoot);
+
+        if (gitUrl) {
+          const exists = await fs.access(realRoot).then(() => true).catch(() => false);
+          if (exists) {
+            const git = simpleGit(realRoot);
+            const isRepo = await git.checkIsRepo().catch(() => false);
+            if (!isRepo) {
+              throw AppError.conflict(`La ruta "${realRoot}" existe pero no es un repositorio git`);
+            }
+            // Already cloned — skip
+          } else {
+            const parentDir = realRoot.substring(0, Math.max(realRoot.lastIndexOf('/'), realRoot.lastIndexOf('\\')));
+            if (parentDir) {
+              await fs.mkdir(parentDir, { recursive: true }).catch(() => {});
+            }
+            try {
+              await simpleGit().clone(gitUrl, realRoot);
+            } catch (err) {
+              fastify.log.error({ err, gitUrl, realRoot }, 'git clone failed');
+              throw AppError.internal(`git clone failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+        }
+
         const row = await fastify.db.projects.insert({
           name,
           rootPath: realRoot,

@@ -1,4 +1,5 @@
 import { FileBrowser } from '@/components/files/file-browser';
+import { GitTab } from '@/components/git/git-panel';
 import { RunGraph } from '@/components/graph/run-graph';
 import { RunList } from '@/components/runs/run-list';
 import { Button } from '@/components/ui/button';
@@ -104,6 +105,7 @@ function ProjectDetailPage() {
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="graph">Graph</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="settings">Ajustes</TabsTrigger>
         </TabsList>
 
@@ -131,6 +133,10 @@ function ProjectDetailPage() {
 
         <TabsContent value="files">
           <FileBrowser projectId={p.id} rootPath={p.rootPath} />
+        </TabsContent>
+
+        <TabsContent value="git">
+          <GitTab projectId={p.id} rootPath={p.rootPath} />
         </TabsContent>
 
         <TabsContent value="settings">

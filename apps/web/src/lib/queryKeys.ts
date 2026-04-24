@@ -6,6 +6,7 @@ export const qk = {
   projects: () => ['cac', 'projects'] as const,
   project: (id: string) => ['cac', 'projects', id] as const,
   projectRuns: (id: string) => ['cac', 'projects', id, 'runs'] as const,
+  projectGit: (id: string) => ['cac', 'projects', id, 'git'] as const,
 
   runs: () => ['cac', 'runs'] as const,
   run: (id: string) => ['cac', 'runs', id] as const,
@@ -15,4 +16,7 @@ export const qk = {
   // admin
   adminUsers: () => ['cac', 'admin', 'users'] as const,
   adminAudit: (params?: { userId?: string }) => ['cac', 'admin', 'audit', params ?? {}] as const,
+
+  // filesystem browser
+  fsBrowse: (path?: string) => ['cac', 'fs', 'browse', path ?? null] as const,
 } as const;

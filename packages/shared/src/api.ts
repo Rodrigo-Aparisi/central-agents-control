@@ -14,6 +14,7 @@ export const CreateProjectInput = z.object({
   name: z.string().trim().min(1).max(120),
   rootPath: z.string().trim().min(1).max(4096),
   description: z.string().max(2000).optional(),
+  gitUrl: z.string().url().optional(),
 });
 export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
 
@@ -167,6 +168,103 @@ export type FileContentResponse = z.infer<typeof FileContentResponse>;
 
 export const ExportFormat = z.enum(['json', 'markdown']);
 export type ExportFormat = z.infer<typeof ExportFormat>;
+
+// Git
+export const GitUserConfig = z.object({
+  name: z.string().nullable(),
+  email: z.string().nullable(),
+});
+export type GitUserConfig = z.infer<typeof GitUserConfig>;
+
+export const GitRemote = z.object({
+  name: z.string(),
+  url: z.string(),
+});
+export type GitRemote = z.infer<typeof GitRemote>;
+
+export const GitFileStatus = z.object({
+  path: z.string(),
+  index: z.string(),
+  working: z.string(),
+});
+export type GitFileStatus = z.infer<typeof GitFileStatus>;
+
+export const GitBranch = z.object({
+  name: z.string(),
+  current: z.boolean(),
+  remote: z.boolean(),
+  commit: z.string(),
+  label: z.string(),
+});
+export type GitBranch = z.infer<typeof GitBranch>;
+
+export const GitLastCommit = z.object({
+  hash: z.string(),
+  message: z.string(),
+  author: z.string(),
+  date: z.string(),
+});
+export type GitLastCommit = z.infer<typeof GitLastCommit>;
+
+export const GitInfoResponse = z.object({
+  isRepo: z.boolean(),
+  branch: z.string().nullable(),
+  remotes: z.array(GitRemote),
+  user: GitUserConfig,
+  status: z.array(GitFileStatus),
+  lastCommit: GitLastCommit.nullable(),
+  branches: z.array(GitBranch),
+  ahead: z.number().int(),
+  behind: z.number().int(),
+});
+export type GitInfoResponse = z.infer<typeof GitInfoResponse>;
+
+export const GitPullResponse = z.object({
+  summary: z.string(),
+  filesChanged: z.number().int(),
+});
+export type GitPullResponse = z.infer<typeof GitPullResponse>;
+
+export const GitCheckoutInput = z.object({
+  branch: z.string().trim().min(1).max(255),
+});
+export type GitCheckoutInput = z.infer<typeof GitCheckoutInput>;
+
+export const GitCheckoutResponse = z.object({
+  branch: z.string(),
+});
+export type GitCheckoutResponse = z.infer<typeof GitCheckoutResponse>;
+
+// Filesystem browse
+export const DirEntry = z.object({
+  name: z.string(),
+  path: z.string(),
+  type: z.enum(['directory', 'drive']),
+});
+export type DirEntry = z.infer<typeof DirEntry>;
+
+export const FsBrowseResponse = z.object({
+  path: z.string(),
+  parent: z.string().nullable(),
+  entries: z.array(DirEntry),
+});
+export type FsBrowseResponse = z.infer<typeof FsBrowseResponse>;
+
+export const FsMkdirInput = z.object({
+  parentPath: z.string().min(1).max(4096),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .regex(/^[^<>:"/\\|?*\x00-\x1f]+$/, 'Nombre de carpeta no válido'),
+});
+export type FsMkdirInput = z.infer<typeof FsMkdirInput>;
+
+export const FsMkdirResponse = z.object({
+  path: z.string(),
+});
+export type FsMkdirResponse = z.infer<typeof FsMkdirResponse>;
 
 // Auth
 export const LoginInput = z.object({

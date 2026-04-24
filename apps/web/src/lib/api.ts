@@ -6,8 +6,17 @@ import type {
   AuthTokensResponse,
   CreateProjectInput,
   CreateUserInput,
+  DirEntry,
   ExportFormat,
+  FsMkdirInput,
+  FsMkdirResponse,
   FileContentResponse,
+  FsBrowseResponse,
+  GitBranch,
+  GitCheckoutInput,
+  GitCheckoutResponse,
+  GitInfoResponse,
+  GitPullResponse,
   GlobalStatsResponse,
   HealthResponse,
   LaunchRunInput,
@@ -24,6 +33,9 @@ import type {
   UpdateUserInput,
   UserRow,
 } from '@cac/shared';
+
+// Re-export types that consumers may need
+export type { DirEntry, FsBrowseResponse, GitBranch, GitInfoResponse, GitPullResponse };
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -61,9 +73,12 @@ async function request<T>(
 
   if (res.status === 401) {
     useAuthStore.getState().clearAuth();
-    window.location.href = '/login';
-    // Return a never-resolving promise since we're redirecting
-    return new Promise<never>(() => {});
+    // Don't redirect when already at /login — just throw so the caller can handle it.
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+      return new Promise<never>(() => {});
+    }
+    throw new ApiError(401, { code: 'UNAUTHORIZED' as const, message: 'Unauthorized' });
   }
 
   if (res.status === 204) return undefined as T;
@@ -177,6 +192,27 @@ export const api = {
         'GET',
         buildQuery(`/v1/projects/${projectId}/files/content`, { path }),
       ),
+  },
+
+  // git
+  git: {
+    info: (projectId: string) =>
+      request<GitInfoResponse>('GET', `/v1/projects/${projectId}/git`),
+    branches: (projectId: string) =>
+      request<{ branches: GitBranch[] }>('GET', `/v1/projects/${projectId}/git/branches`),
+    pull: (projectId: string) =>
+      request<GitPullResponse>('POST', `/v1/projects/${projectId}/git/pull`),
+    fetch: (projectId: string) =>
+      request<{ ok: boolean }>('POST', `/v1/projects/${projectId}/git/fetch`),
+    checkout: (projectId: string, input: GitCheckoutInput) =>
+      request<GitCheckoutResponse>('POST', `/v1/projects/${projectId}/git/checkout`, input),
+  },
+
+  // filesystem browser
+  fs: {
+    browse: (path?: string) =>
+      request<FsBrowseResponse>('GET', buildQuery('/v1/fs/browse', path ? { path } : undefined)),
+    mkdir: (input: FsMkdirInput) => request<FsMkdirResponse>('POST', '/v1/fs/mkdir', input),
   },
 };
 

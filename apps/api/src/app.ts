@@ -29,6 +29,8 @@ import { authRoutes } from './routes/auth';
 import { eventRoutes } from './routes/events';
 import { exportRoutes } from './routes/export';
 import { fileRoutes } from './routes/files';
+import { fsBrowseRoutes } from './routes/fs-browse';
+import { gitRoutes } from './routes/git';
 import { healthRoutes } from './routes/health';
 import { projectRoutes } from './routes/projects';
 import { runGraphRoutes } from './routes/run-graph';
@@ -86,6 +88,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(runGraphRoutes);
   await app.register(fileRoutes);
   await app.register(exportRoutes);
+  await app.register(gitRoutes);
+  await app.register(fsBrowseRoutes);
   await app.register(adminUserRoutes);
   await app.register(adminAuditRoutes);
 
