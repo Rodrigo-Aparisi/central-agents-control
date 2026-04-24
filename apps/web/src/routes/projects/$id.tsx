@@ -1,3 +1,4 @@
+import { AgentsTab } from '@/components/agents/agents-tab';
 import { FileBrowser } from '@/components/files/file-browser';
 import { GitTab } from '@/components/git/git-panel';
 import { RunGraph } from '@/components/graph/run-graph';
@@ -14,7 +15,7 @@ import { qk } from '@/lib/queryKeys';
 import { ALLOWED_CLAUDE_FLAGS, UpdateProjectInput } from '@cac/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createRoute, useNavigate } from '@tanstack/react-router';
-import { Play, Trash2 } from 'lucide-react';
+import { Copy, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Route as rootRoute } from '../__root';
@@ -39,8 +40,6 @@ export const Route = createRoute({
 
 function ProjectDetailPage() {
   const { id } = Route.useParams();
-  const navigate = useNavigate();
-  const qc = useQueryClient();
 
   const project = useQuery({
     queryKey: qk.project(id),
@@ -50,16 +49,6 @@ function ProjectDetailPage() {
     queryKey: qk.projectRuns(id),
     queryFn: () => api.runs.byProject(id, { limit: 50 }),
     refetchInterval: 5_000,
-  });
-
-  const del = useMutation({
-    mutationFn: () => api.projects.delete(id),
-    onSuccess: () => {
-      toast.success('Proyecto eliminado');
-      qc.invalidateQueries({ queryKey: qk.projects() });
-      navigate({ to: '/projects' });
-    },
-    onError: (e) => toast.error(humanizeError(e)),
   });
 
   if (project.isPending) return <p className="text-sm text-muted-foreground">Cargando…</p>;
@@ -86,17 +75,6 @@ function ProjectDetailPage() {
               Lanzar run
             </Link>
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (confirm(`¿Eliminar proyecto "${p.name}"? Borrará sus runs en cascada.`)) {
-                del.mutate();
-              }
-            }}
-            disabled={del.isPending}
-          >
-            <Trash2 className="size-4" />
-          </Button>
         </div>
       </div>
 
@@ -106,6 +84,7 @@ function ProjectDetailPage() {
           <TabsTrigger value="graph">Graph</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
+          <TabsTrigger value="agents">Agentes</TabsTrigger>
           <TabsTrigger value="settings">Ajustes</TabsTrigger>
         </TabsList>
 
@@ -139,6 +118,10 @@ function ProjectDetailPage() {
           <GitTab projectId={p.id} rootPath={p.rootPath} />
         </TabsContent>
 
+        <TabsContent value="agents">
+          <AgentsTab projectId={p.id} />
+        </TabsContent>
+
         <TabsContent value="settings">
           <SettingsTab projectId={p.id} />
         </TabsContent>
@@ -159,18 +142,33 @@ function GraphTab({ projectId }: { projectId: string }) {
   return <RunGraph graph={data} />;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PRESET_MODELS = [
+  { id: 'claude-opus-4-7', label: 'Claude Opus 4.7 — más capaz' },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 — equilibrado' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 — rápido' },
+] as const;
+
 const FLAG_OPTIONS = Array.from(ALLOWED_CLAUDE_FLAGS).filter((f) => f !== '--output-format');
 
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+
 function SettingsTab({ projectId }: { projectId: string }) {
+  const navigate = useNavigate();
   const qc = useQueryClient();
+
   const project = useQuery({
     queryKey: qk.project(projectId),
     queryFn: () => api.projects.get(projectId),
   });
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [timeoutMin, setTimeoutMin] = useState('30');
   const [model, setModel] = useState('');
+  const [customModel, setCustomModel] = useState('');
+  const [timeoutMin, setTimeoutMin] = useState('30');
+  const [maxTurns, setMaxTurns] = useState('');
   const [allowedFlags, setAllowedFlags] = useState<Set<string>>(new Set());
   const [initialised, setInitialised] = useState(false);
 
@@ -181,12 +179,21 @@ function SettingsTab({ projectId }: { projectId: string }) {
       timeoutMs?: number;
       model?: string;
       allowedFlags?: string[];
+      maxTurns?: number;
     };
     if (typeof cfg.timeoutMs === 'number') {
       setTimeoutMin(String(Math.max(1, Math.round(cfg.timeoutMs / 60_000))));
     }
-    if (typeof cfg.model === 'string') setModel(cfg.model);
+    if (typeof cfg.model === 'string') {
+      if (PRESET_MODELS.some((m) => m.id === cfg.model)) {
+        setModel(cfg.model);
+      } else {
+        setModel('custom');
+        setCustomModel(cfg.model);
+      }
+    }
     if (Array.isArray(cfg.allowedFlags)) setAllowedFlags(new Set(cfg.allowedFlags));
+    if (typeof cfg.maxTurns === 'number') setMaxTurns(String(cfg.maxTurns));
     setInitialised(true);
   }
 
@@ -194,11 +201,12 @@ function SettingsTab({ projectId }: { projectId: string }) {
     mutationFn: () => {
       const claudeConfig: Record<string, unknown> = {};
       const minutes = Number(timeoutMin);
-      if (Number.isFinite(minutes) && minutes > 0) {
-        claudeConfig.timeoutMs = minutes * 60_000;
-      }
-      if (model.trim().length > 0) claudeConfig.model = model.trim();
+      if (Number.isFinite(minutes) && minutes > 0) claudeConfig.timeoutMs = minutes * 60_000;
+      const effectiveModel = model === 'custom' ? customModel.trim() : model;
+      if (effectiveModel.length > 0) claudeConfig.model = effectiveModel;
       if (allowedFlags.size > 0) claudeConfig.allowedFlags = Array.from(allowedFlags).sort();
+      const turns = Number(maxTurns);
+      if (Number.isFinite(turns) && turns > 0) claudeConfig.maxTurns = turns;
 
       const parsed = UpdateProjectInput.safeParse({
         name,
@@ -218,6 +226,16 @@ function SettingsTab({ projectId }: { projectId: string }) {
     onError: (e) => toast.error(humanizeError(e)),
   });
 
+  const del = useMutation({
+    mutationFn: () => api.projects.delete(projectId),
+    onSuccess: () => {
+      toast.success('Proyecto eliminado');
+      qc.invalidateQueries({ queryKey: qk.projects() });
+      navigate({ to: '/projects' });
+    },
+    onError: (e) => toast.error(humanizeError(e)),
+  });
+
   function toggleFlag(flag: string): void {
     setAllowedFlags((prev) => {
       const next = new Set(prev);
@@ -227,12 +245,14 @@ function SettingsTab({ projectId }: { projectId: string }) {
     });
   }
 
+  const p = project.data;
+
   return (
     <div className="space-y-4">
+      {/* Project Info */}
       <Card>
         <CardHeader>
-          <CardTitle>Ajustes del proyecto</CardTitle>
-          <CardDescription>Nombre, descripción y configuración del runner.</CardDescription>
+          <CardTitle className="text-sm">Información del proyecto</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -245,21 +265,91 @@ function SettingsTab({ projectId }: { projectId: string }) {
               id="p-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={4}
+              rows={3}
             />
+          </div>
+          {p && (
+            <div className="space-y-1.5">
+              <Label>Ruta del proyecto</Label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 truncate rounded-md bg-muted px-2 py-1.5 font-mono text-xs">
+                  {p.rootPath}
+                </code>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 shrink-0 px-2"
+                  onClick={() =>
+                    navigator.clipboard.writeText(p.rootPath).then(
+                      () => toast.success('Ruta copiada'),
+                      () => {},
+                    )
+                  }
+                  aria-label="Copiar ruta"
+                >
+                  <Copy className="size-3.5" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Creado{' '}
+                {new Date(p.createdAt).toLocaleDateString('es-ES', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}{' '}
+                · Actualizado{' '}
+                {new Date(p.updatedAt).toLocaleDateString('es-ES', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </p>
+            </div>
+          )}
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending ? 'Guardando…' : 'Guardar información'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Runner Config */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Configuración del runner</CardTitle>
+          <CardDescription className="text-xs">
+            Defaults aplicados al lanzar un run desde este proyecto.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="p-model">Modelo por defecto</Label>
+            <select
+              id="p-model"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">— Global (claude-sonnet-4-6) —</option>
+              {PRESET_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+              <option value="custom">Personalizado…</option>
+            </select>
+            {model === 'custom' && (
+              <Input
+                value={customModel}
+                onChange={(e) => setCustomModel(e.target.value)}
+                placeholder="claude-sonnet-4-6"
+                className="font-mono text-sm"
+              />
+            )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="p-model">Modelo por defecto</Label>
-              <Input
-                id="p-model"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="claude-sonnet-4-6"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="p-timeout">Timeout (minutos)</Label>
+              <Label htmlFor="p-timeout">Timeout por defecto (min)</Label>
               <Input
                 id="p-timeout"
                 type="number"
@@ -267,6 +357,21 @@ function SettingsTab({ projectId }: { projectId: string }) {
                 max={120}
                 value={timeoutMin}
                 onChange={(e) => setTimeoutMin(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="p-maxturns">
+                Max turns{' '}
+                <span className="text-xs font-normal text-muted-foreground">(iteraciones)</span>
+              </Label>
+              <Input
+                id="p-maxturns"
+                type="number"
+                min={1}
+                max={200}
+                value={maxTurns}
+                onChange={(e) => setMaxTurns(e.target.value)}
+                placeholder="Sin límite"
               />
             </div>
           </div>
@@ -292,7 +397,36 @@ function SettingsTab({ projectId }: { projectId: string }) {
             </p>
           </div>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? 'Guardando…' : 'Guardar cambios'}
+            {save.isPending ? 'Guardando…' : 'Guardar configuración'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone */}
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-sm text-destructive">Zona de peligro</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Eliminar el proyecto borrará en cascada todos sus runs, eventos y artefactos. Esta
+            acción no se puede deshacer.
+          </p>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (
+                confirm(
+                  `¿Eliminar el proyecto "${name}"?\n\nSe borrarán todos sus runs en cascada. Esta acción no se puede deshacer.`,
+                )
+              )
+                del.mutate();
+            }}
+            disabled={del.isPending}
+          >
+            <Trash2 className="size-4" />
+            {del.isPending ? 'Eliminando…' : 'Eliminar proyecto'}
           </Button>
         </CardContent>
       </Card>

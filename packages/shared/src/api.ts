@@ -313,3 +313,34 @@ export const AuditEventRow = z.object({
   timestamp: z.string().datetime({ offset: true }),
 });
 export type AuditEventRow = z.infer<typeof AuditEventRow>;
+
+// Claude Code project config (CLAUDE.md, agents, hooks)
+export const ClaudeAgentEntry = z.object({
+  filename: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  body: z.string(),
+});
+export type ClaudeAgentEntry = z.infer<typeof ClaudeAgentEntry>;
+
+export const ClaudeConfigResponse = z.object({
+  claudeMd: z.object({ exists: z.boolean(), content: z.string() }),
+  agents: z.array(ClaudeAgentEntry),
+  settingsJson: z.object({
+    exists: z.boolean(),
+    content: z.record(z.unknown()).nullable(),
+  }),
+});
+export type ClaudeConfigResponse = z.infer<typeof ClaudeConfigResponse>;
+
+export const WriteFileInput = z.object({
+  content: z.string().max(200_000),
+});
+export type WriteFileInput = z.infer<typeof WriteFileInput>;
+
+export const UpsertAgentInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).optional(),
+  body: z.string().max(200_000),
+});
+export type UpsertAgentInput = z.infer<typeof UpsertAgentInput>;

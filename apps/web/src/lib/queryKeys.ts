@@ -19,4 +19,7 @@ export const qk = {
 
   // filesystem browser
   fsBrowse: (path?: string) => ['cac', 'fs', 'browse', path ?? null] as const,
+
+  // Claude Code project config
+  projectClaudeConfig: (id: string) => ['cac', 'projects', id, 'claude-config'] as const,
 } as const;

@@ -13,11 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
+import { CLAUDE_INIT_PROMPT } from '@/lib/claude-init';
 import { humanizeError } from '@/lib/errors';
 import { qk } from '@/lib/queryKeys';
 import { CreateProjectInput } from '@cac/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Plus } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
+import { FolderOpen, Plus, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -31,23 +33,38 @@ function extractRepoName(url: string): string {
 }
 
 export function CreateProjectDialog() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('local');
   const [name, setName] = useState('');
   const [rootPath, setRootPath] = useState('');
   const [gitUrl, setGitUrl] = useState('');
   const [description, setDescription] = useState('');
+  const [initWithClaude, setInitWithClaude] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
   const qc = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: (input: CreateProjectInput) => api.projects.create(input),
-    onSuccess: (project) => {
-      toast.success(`Proyecto "${project.name}" creado`);
+    onSuccess: async (project) => {
       qc.invalidateQueries({ queryKey: qk.projects() });
       setOpen(false);
       reset();
+
+      if (initWithClaude) {
+        try {
+          const { runId } = await api.runs.launch(project.id, { prompt: CLAUDE_INIT_PROMPT });
+          toast.success(`Proyecto "${project.name}" creado — inicializando con Claude…`);
+          navigate({ to: '/runs/$id', params: { id: runId } });
+        } catch (err) {
+          toast.success(`Proyecto "${project.name}" creado`);
+          toast.error(`No se pudo lanzar la inicialización: ${humanizeError(err)}`);
+          navigate({ to: '/projects/$id', params: { id: project.id } });
+        }
+      } else {
+        toast.success(`Proyecto "${project.name}" creado`);
+      }
     },
     onError: (err) => {
       setError(humanizeError(err));
@@ -60,6 +77,7 @@ export function CreateProjectDialog() {
     setRootPath('');
     setGitUrl('');
     setDescription('');
+    setInitWithClaude(true);
     setError(null);
   }
 
@@ -106,8 +124,7 @@ export function CreateProjectDialog() {
           </DialogHeader>
 
           {/* Mode selector */}
-          <div
-            role="group"
+          <fieldset
             aria-label="Modo de creación"
             className="flex gap-1 rounded-md border border-border p-0.5"
           >
@@ -137,7 +154,7 @@ export function CreateProjectDialog() {
             >
               Clonar desde URL
             </button>
-          </div>
+          </fieldset>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -247,6 +264,25 @@ export function CreateProjectDialog() {
                 rows={3}
               />
             </div>
+
+            {/* Init with Claude */}
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={initWithClaude}
+                onChange={(e) => setInitWithClaude(e.target.checked)}
+                className="mt-0.5 shrink-0"
+              />
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  <Sparkles className="size-3.5 text-primary" aria-hidden />
+                  Inicializar con Claude /init
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Después de crear, Claude analizará el proyecto y generará CLAUDE.md y agentes.
+                </p>
+              </div>
+            </label>
 
             {error ? (
               <p className="text-sm text-destructive" role="alert">

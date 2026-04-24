@@ -34,6 +34,7 @@ export const ProjectClaudeConfig = z.object({
   timeoutMs: z.number().int().positive().optional(),
   allowedFlags: z.array(z.string()).optional(),
   model: z.string().optional(),
+  maxTurns: z.number().int().positive().optional(),
 });
 export type ProjectClaudeConfig = z.infer<typeof ProjectClaudeConfig>;
 

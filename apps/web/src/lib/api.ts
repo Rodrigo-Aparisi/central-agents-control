@@ -4,6 +4,8 @@ import type {
   Artifact,
   AuditEventRow,
   AuthTokensResponse,
+  ClaudeAgentEntry,
+  ClaudeConfigResponse,
   CreateProjectInput,
   CreateUserInput,
   DirEntry,
@@ -31,11 +33,21 @@ import type {
   RunStatus,
   UpdateProjectInput,
   UpdateUserInput,
+  UpsertAgentInput,
   UserRow,
+  WriteFileInput,
 } from '@cac/shared';
 
 // Re-export types that consumers may need
-export type { DirEntry, FsBrowseResponse, GitBranch, GitInfoResponse, GitPullResponse };
+export type {
+  ClaudeAgentEntry,
+  ClaudeConfigResponse,
+  DirEntry,
+  FsBrowseResponse,
+  GitBranch,
+  GitInfoResponse,
+  GitPullResponse,
+};
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -213,6 +225,25 @@ export const api = {
     browse: (path?: string) =>
       request<FsBrowseResponse>('GET', buildQuery('/v1/fs/browse', path ? { path } : undefined)),
     mkdir: (input: FsMkdirInput) => request<FsMkdirResponse>('POST', '/v1/fs/mkdir', input),
+  },
+
+  // Claude Code project config (CLAUDE.md, agents, hooks)
+  claudeConfig: {
+    get: (projectId: string) =>
+      request<ClaudeConfigResponse>('GET', `/v1/projects/${projectId}/claude-config`),
+    writeClaude: (projectId: string, input: WriteFileInput) =>
+      request<{ ok: boolean }>('PUT', `/v1/projects/${projectId}/claude-config/claudemd`, input),
+    upsertAgent: (projectId: string, filename: string, input: UpsertAgentInput) =>
+      request<{ ok: boolean }>(
+        'PUT',
+        `/v1/projects/${projectId}/claude-config/agents/${filename}`,
+        input,
+      ),
+    deleteAgent: (projectId: string, filename: string) =>
+      request<{ ok: boolean }>(
+        'DELETE',
+        `/v1/projects/${projectId}/claude-config/agents/${filename}`,
+      ),
   },
 };
 
