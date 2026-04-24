@@ -36,6 +36,7 @@ export const authPlugin = fp(
       (role: 'admin' | 'viewer'): preHandlerAsyncHookHandler =>
       async (req, _reply) => {
         await verifyAuth(req);
+        if (!config.AUTH_ENABLED) return;
         if (role === 'admin' && req.jwtUser?.role !== 'admin') {
           throw fastify.httpErrors.forbidden('Admin role required');
         }
