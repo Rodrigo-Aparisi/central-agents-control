@@ -7,14 +7,37 @@ import { humanizeError } from '@/lib/errors';
 import { useAuthStore } from '@/stores/auth';
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { z } from 'zod';
 import { Route as rootRoute } from './__root';
+
+const searchSchema = z.object({
+  redirect: z
+    .string()
+    .optional()
+    .transform((v) => (v?.startsWith('/') ? v : undefined)),
+});
 
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
-  beforeLoad: () => {
+  validateSearch: searchSchema,
+  beforeLoad: async ({ search }) => {
+    const dest = search.redirect ?? '/projects';
     if (useAuthStore.getState().isAuthenticated()) {
-      throw redirect({ to: '/projects' });
+      throw redirect({ to: dest });
+    }
+    // Silent refresh: when AUTH_ENABLED=false the server always returns a synthetic
+    // token, so we can skip the login form entirely. Also handles the case where a
+    // valid httpOnly cookie is already set (page reload while logged in).
+    let tokens: Awaited<ReturnType<typeof api.auth.refresh>> | undefined;
+    try {
+      tokens = await api.auth.refresh();
+    } catch {
+      return; // no cookie or real auth mode — show the login form
+    }
+    if (tokens) {
+      useAuthStore.getState().setTokens(tokens.accessToken, tokens.userId, tokens.role, tokens.expiresIn);
+      throw redirect({ to: dest });
     }
   },
   component: LoginPage,
@@ -22,6 +45,7 @@ export const Route = createRoute({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const setTokens = useAuthStore((s) => s.setTokens);
 
   const [email, setEmail] = useState('');
@@ -37,7 +61,7 @@ function LoginPage() {
     try {
       const tokens = await api.auth.login({ email, password });
       setTokens(tokens.accessToken, tokens.userId, tokens.role, tokens.expiresIn);
-      await navigate({ to: '/projects' });
+      await navigate({ to: search.redirect ?? '/projects' });
     } catch (err) {
       setErrorMsg(humanizeError(err));
     } finally {
