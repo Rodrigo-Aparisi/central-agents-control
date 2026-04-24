@@ -31,6 +31,7 @@ export function RunGraph({ graph }: Props) {
       position: { x: 0, y: 0 },
       data: {
         shortId: n.id.slice(0, 8),
+        label: n.prompt.length > 0 ? n.prompt.slice(0, 40) : undefined,
         status: n.status,
         timestamp: n.createdAt.slice(11, 16),
         duration: null,

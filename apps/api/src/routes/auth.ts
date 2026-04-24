@@ -86,8 +86,10 @@ export const authRoutes = fp(
         // frontend guard passes without requiring a real user in the DB.
         if (!fastify.config.AUTH_ENABLED) {
           const expiresIn = 86_400; // 24h synthetic
-          const accessToken = fastify.jwt.sign({ sub: 'dev', role: 'admin' }, { expiresIn });
-          return reply.send({ accessToken, userId: 'dev', role: 'admin', expiresIn });
+          // Use a fixed valid UUID so the AuthTokensResponse schema (userId: UuidV7) passes.
+          const DEV_USER_ID = '00000000-0000-7000-8000-000000000001';
+          const accessToken = fastify.jwt.sign({ sub: DEV_USER_ID, role: 'admin' }, { expiresIn });
+          return reply.send({ accessToken, userId: DEV_USER_ID, role: 'admin', expiresIn });
         }
 
         const rawToken = req.cookies.cac_refresh;

@@ -152,6 +152,9 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
   const artifactOps = new Map<string, ArtifactOperation>();
   const artifactContents = new Map<string, string | null>();
 
+  // Track Task tool_use invocations to create synthetic child run records
+  const taskDescriptions: Array<{ description: string }> = [];
+
   const flush = async (): Promise<void> => {
     if (buffer.length === 0) return;
     const batch = buffer.splice(0);
@@ -203,6 +206,16 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
       if (ev.payload.type === 'tool_use') {
         const { tool, input } = ev.payload;
         const toolLower = tool.toLowerCase();
+
+        if (toolLower === 'task') {
+          const raw =
+            input['description'] ??
+            input['prompt'] ??
+            'sub-agent';
+          const description = String(raw).slice(0, 200);
+          taskDescriptions.push({ description });
+        }
+
         const filePath = typeof input.file_path === 'string' ? input.file_path : null;
         if (filePath) {
           if (toolLower === 'write') {
@@ -274,6 +287,16 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
         : result.reason === 'timeout'
           ? 'timeout'
           : 'failed';
+
+  if (taskDescriptions.length > 0) {
+    await Promise.all(
+      taskDescriptions.map(({ description }) =>
+        db.runs
+          .insert({ projectId, parentRunId: runId, prompt: description, status, params })
+          .catch((err) => log.warn({ err }, 'failed to create task sub-run')),
+      ),
+    );
+  }
 
   await db.runs.markFinished(runId, {
     status,

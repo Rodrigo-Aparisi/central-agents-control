@@ -115,8 +115,14 @@ export function renderPayload(ev: RunEvent): string {
   switch (p.type) {
     case 'assistant_message':
       return p.content;
-    case 'tool_use':
+    case 'tool_use': {
+      const toolLower = p.tool.toLowerCase();
+      if (toolLower === 'task') {
+        const desc = typeof p.input['description'] === 'string' ? p.input['description'] : '';
+        return desc ? `→ ${desc}` : `Task(${summarise(p.input)})`;
+      }
       return `${p.tool}(${summarise(p.input)})`;
+    }
     case 'tool_result':
       return p.isError ? `ERROR: ${p.output}` : p.output;
     case 'thinking':

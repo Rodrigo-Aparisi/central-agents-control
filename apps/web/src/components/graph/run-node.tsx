@@ -4,6 +4,7 @@ import { Handle, type NodeProps, Position } from '@xyflow/react';
 
 export interface RunNodeData extends Record<string, unknown> {
   shortId: string;
+  label?: string;
   status: RunStatus;
   timestamp: string;
   duration: string | null;
@@ -43,7 +44,11 @@ export function RunNode({ data, selected }: NodeProps) {
         className="!h-2 !w-2 !border-0 !bg-transparent"
       />
 
-      <span className="tnum font-mono text-[11px] text-foreground">{d.shortId}</span>
+      {d.label ? (
+        <span className="flex-1 truncate font-mono text-[11px] text-foreground">{d.label}</span>
+      ) : (
+        <span className="tnum font-mono text-[11px] text-foreground">{d.shortId}</span>
+      )}
       <span
         className={cn('size-1.5 rounded-full', d.status === 'running' && 'animate-pulse')}
         style={{ backgroundColor: stripe }}
