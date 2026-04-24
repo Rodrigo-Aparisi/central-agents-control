@@ -82,6 +82,14 @@ export const authRoutes = fp(
       '/v1/auth/refresh',
       { schema: { response: { 200: AuthTokensResponse } } },
       async (req, reply) => {
+        // In dev mode (AUTH_ENABLED=false) always return a synthetic admin token so the
+        // frontend guard passes without requiring a real user in the DB.
+        if (!fastify.config.AUTH_ENABLED) {
+          const expiresIn = 86_400; // 24h synthetic
+          const accessToken = fastify.jwt.sign({ sub: 'dev', role: 'admin' }, { expiresIn });
+          return reply.send({ accessToken, userId: 'dev', role: 'admin', expiresIn });
+        }
+
         const rawToken = req.cookies.cac_refresh;
         if (!rawToken) throw fastify.httpErrors.unauthorized('Missing refresh token');
 
