@@ -1,3 +1,4 @@
+import { AgentFlowGraph } from '@/components/graph/agent-flow-graph';
 import { ChangedFiles } from '@/components/runs/changed-files';
 import { LogViewer } from '@/components/runs/log-viewer';
 import { RunStatusBadge } from '@/components/runs/run-status-badge';
@@ -12,8 +13,8 @@ import { humanizeError } from '@/lib/errors';
 import { qk } from '@/lib/queryKeys';
 import { useRunnerPanelStore } from '@/stores/runnerPanel';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createRoute, useNavigate } from '@tanstack/react-router';
-import { Ban, Download, RotateCcw } from 'lucide-react';
+import { Link, createRoute, useNavigate } from '@tanstack/react-router';
+import { Ban, Download, FolderOpen, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Route as rootRoute } from '../__root';
@@ -44,6 +45,13 @@ function RunPage() {
       const s = q.state.data?.status;
       return s === 'queued' || s === 'running' ? 2000 : false;
     },
+  });
+
+  const project = useQuery({
+    queryKey: qk.project(run.data?.projectId ?? ''),
+    queryFn: () => api.projects.get(run.data!.projectId),
+    enabled: !!run.data?.projectId,
+    staleTime: 60_000,
   });
 
   const initialEvents = useQuery({
@@ -96,6 +104,18 @@ function RunPage() {
 
   return (
     <div className="space-y-6">
+      {project.data && (
+        <div>
+          <Link
+            to="/projects/$id"
+            params={{ id: r.projectId }}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <FolderOpen className="size-3.5" />
+            {project.data.name}
+          </Link>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -142,6 +162,7 @@ function RunPage() {
       <Tabs defaultValue="log">
         <TabsList>
           <TabsTrigger value="log">Log</TabsTrigger>
+          <TabsTrigger value="flow">Agent Flow</TabsTrigger>
           <TabsTrigger value="files">
             Archivos cambiados
             {artifacts.data ? ` (${artifacts.data.items.length})` : ''}
@@ -154,6 +175,15 @@ function RunPage() {
             events={mergedEvents}
             autoscroll={isActive}
             highlightSeq={isTerminal ? selectedSeq : null}
+          />
+        </TabsContent>
+
+        <TabsContent value="flow">
+          <AgentFlowGraph
+            events={mergedEvents}
+            runId={r.id}
+            runPrompt={r.prompt}
+            runStatus={displayStatus}
           />
         </TabsContent>
 
