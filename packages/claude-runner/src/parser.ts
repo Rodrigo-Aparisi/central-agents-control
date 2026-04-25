@@ -10,6 +10,8 @@ export const TOOL_USE_WHITELIST = new Set<string>([
   'glob',
   'grep',
   'task',
+  'agent',
+  'multiedit',
 ]);
 
 const MAX_TOOL_OUTPUT_BYTES = 4 * 1024;
