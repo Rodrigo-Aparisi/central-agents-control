@@ -58,15 +58,27 @@ export const projectRoutes = fp(
 
         if (gitUrl) {
           const exists = await fs.access(realRoot).then(() => true).catch(() => false);
+          let doClone = !exists;
           if (exists) {
             const git = simpleGit(realRoot);
             const isRepo = await git.checkIsRepo().catch(() => false);
-            if (!isRepo) {
-              throw AppError.conflict(`La ruta "${realRoot}" existe pero no es un repositorio git`);
+            if (isRepo) {
+              // Already cloned — skip
+            } else {
+              const entries = await fs.readdir(realRoot).catch(() => [] as string[]);
+              if (entries.length > 0) {
+                throw AppError.conflict(
+                  `La ruta "${realRoot}" ya existe y no está vacía. Elimínela o elija otra ruta de destino.`,
+                );
+              }
+              // Empty folder: remove it so git clone can create it fresh
+              await fs.rm(realRoot, { recursive: true, force: true });
+              doClone = true;
             }
-            // Already cloned — skip
-          } else {
-            const parentDir = realRoot.substring(0, Math.max(realRoot.lastIndexOf('/'), realRoot.lastIndexOf('\\')));
+          }
+          if (doClone) {
+            const sep = realRoot.includes('/') ? '/' : '\\';
+            const parentDir = realRoot.substring(0, realRoot.lastIndexOf(sep));
             if (parentDir) {
               await fs.mkdir(parentDir, { recursive: true }).catch(() => {});
             }
