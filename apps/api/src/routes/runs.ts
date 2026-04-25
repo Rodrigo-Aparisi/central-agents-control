@@ -179,7 +179,7 @@ export const runRoutes = fp(
 
         const run = await fastify.db.runs.insert({
           projectId: source.projectId,
-          parentRunId: source.id,
+          parentRunId: null,
           status: 'queued',
           prompt,
           params,

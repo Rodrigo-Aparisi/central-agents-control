@@ -201,11 +201,13 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
         const { tool, input } = ev.payload;
         const toolLower = tool.toLowerCase();
 
-        if (toolLower === 'task') {
+        if (toolLower === 'task' || toolLower === 'agent') {
+          // For Agent tool: prefer subagent_type (the agent name) as the prompt so it's
+          // identifiable in run lists. For Task: use description/prompt text as before.
           const raw =
-            input['description'] ??
-            input['prompt'] ??
-            'sub-agent';
+            toolLower === 'agent' && typeof input['subagent_type'] === 'string'
+              ? input['subagent_type']
+              : input['description'] ?? input['prompt'] ?? (toolLower === 'agent' ? 'async agent' : 'sub-agent');
           const description = String(raw).slice(0, 200);
           taskDescriptions.push({ description });
         }
