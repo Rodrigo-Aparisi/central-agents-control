@@ -11,6 +11,10 @@ const REQUIRED_ALLOW = [
   'Glob(**)',
   'Grep(**)',
   'Task(**)',
+  // Explicit dotfile entries: many glob implementations skip hidden dirs by default,
+  // so Write(**) alone may not cover .claude/agents/** in Claude Code's matcher.
+  'Write(.claude/**)',
+  'Edit(.claude/**)',
 ];
 
 const DEFAULT_DENY = [
