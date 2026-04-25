@@ -5,7 +5,6 @@ import {
   RUNS_NAMESPACE,
   type RunEvent,
   type RunParams,
-  wrapUntrustedInput,
 } from '@cac/shared';
 import type { RunStatusMessage } from '@cac/shared';
 import { Worker } from 'bullmq';
@@ -114,18 +113,13 @@ async function processRun(deps: ProcessRunDeps): Promise<void> {
     timeoutMs: config.RUN_TIMEOUT_MS,
   }) as RunParams;
 
-  const wrappedPrompt = wrapUntrustedInput({
-    source: `project:${project.id}`,
-    content: run.prompt,
-  });
-
   let handle: ReturnType<typeof startRunner>;
   try {
     handle = startRunner({
       runId,
       projectRoot: project.rootPath,
       projectsRoot: config.resolvedProjectsRoot,
-      prompt: wrappedPrompt,
+      prompt: run.prompt,
       params,
       claudeBin: config.CLAUDE_BIN,
       envExtras: config.ANTHROPIC_API_KEY
