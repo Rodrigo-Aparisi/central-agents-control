@@ -26,6 +26,7 @@ import { adminAuditRoutes } from './routes/admin/audit';
 import { adminUserRoutes } from './routes/admin/users';
 import { artifactRoutes } from './routes/artifacts';
 import { authRoutes } from './routes/auth';
+import { agentChatRoutes } from './routes/agent-chat';
 import { claudeConfigRoutes } from './routes/claude-config';
 import { eventRoutes } from './routes/events';
 import { exportRoutes } from './routes/export';
@@ -92,6 +93,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(gitRoutes);
   await app.register(fsBrowseRoutes);
   await app.register(claudeConfigRoutes);
+  await app.register(agentChatRoutes);
   await app.register(adminUserRoutes);
   await app.register(adminAuditRoutes);
 

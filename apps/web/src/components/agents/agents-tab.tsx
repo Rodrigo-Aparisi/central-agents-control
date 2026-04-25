@@ -4,10 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
@@ -18,8 +20,8 @@ import { useUiStore } from '@/stores/ui';
 import type { ClaudeAgentEntry } from '@cac/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Bot, FileText, Loader2, Pencil, Plus, Settings2, Sparkles, Trash2 } from 'lucide-react';
-import { Suspense, lazy, useState } from 'react';
+import { Bot, FileText, Loader2, Pencil, Plus, SendHorizontal, Settings2, Sparkles, Trash2 } from 'lucide-react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const MonacoEditor = lazy(async () => {
@@ -55,6 +57,7 @@ export function AgentsTab({ projectId }: AgentsTabProps) {
   const [claudeMdOpen, setClaudeMdOpen] = useState(false);
   const [agentEditorOpen, setAgentEditorOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<ClaudeAgentEntry | null>(null);
+  const [agentChatOpen, setAgentChatOpen] = useState(false);
 
   const initMutation = useMutation({
     mutationFn: () => api.runs.launch(projectId, { prompt: CLAUDE_INIT_PROMPT }),
@@ -165,17 +168,27 @@ export function AgentsTab({ projectId }: AgentsTabProps) {
                 {data.agents.length}
               </Badge>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEditingAgent(null);
-                setAgentEditorOpen(true);
-              }}
-            >
-              <Plus className="size-3.5" />
-              Nuevo
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAgentChatOpen(true)}
+              >
+                <Sparkles className="size-3.5" />
+                Crear con IA
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditingAgent(null);
+                  setAgentEditorOpen(true);
+                }}
+              >
+                <Plus className="size-3.5" />
+                Manual
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -242,6 +255,13 @@ export function AgentsTab({ projectId }: AgentsTabProps) {
           agent={editingAgent}
           open={agentEditorOpen}
           onOpenChange={setAgentEditorOpen}
+        />
+      )}
+      {agentChatOpen && (
+        <AgentChatDialog
+          projectId={projectId}
+          open={agentChatOpen}
+          onOpenChange={setAgentChatOpen}
         />
       )}
     </div>
@@ -493,6 +513,295 @@ function AgentEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Agent Chat ───────────────────────────────────────────────────────────────
+
+interface ChatMsg {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface DetectedAgent {
+  name: string;
+  description: string;
+  filename: string;
+  body: string;
+}
+
+function parseAgentDefinition(text: string): DetectedAgent | null {
+  const match = text.match(/```agent-definition\n([\s\S]*?)```/);
+  if (!match) return null;
+  const content = match[1] ?? '';
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith('---')) return null;
+  const after = trimmed.slice(3);
+  const endIdx = after.indexOf('\n---');
+  if (endIdx === -1) return null;
+  const fm = after.slice(0, endIdx);
+  const body = after.slice(endIdx + 4).replace(/^\n/, '');
+  const name = fm.match(/^name:\s*(.+)$/m)?.[1]?.trim() ?? '';
+  const description = fm.match(/^description:\s*(.+)$/m)?.[1]?.trim() ?? '';
+  const filename = fm.match(/^filename:\s*(.+)$/m)?.[1]?.trim() ?? slugify(name);
+  if (!name) return null;
+  return { name, description, filename, body };
+}
+
+function AgentChatDialog({
+  projectId,
+  open,
+  onOpenChange,
+}: {
+  projectId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
+  const [inputVal, setInputVal] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const detectedAgent = useMemo<DetectedAgent | null>(() => {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
+      if (msg && msg.role === 'assistant') {
+        const d = parseAgentDefinition(msg.content);
+        if (d) return d;
+      }
+    }
+    return null;
+  }, [msgs]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [msgs]);
+
+  const sendMessage = async () => {
+    const text = inputVal.trim();
+    if (!text || isStreaming) return;
+
+    const outgoing: ChatMsg[] = [...msgs, { role: 'user', content: text }];
+    setMsgs([...outgoing, { role: 'assistant', content: '' }]);
+    setInputVal('');
+    setIsStreaming(true);
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    try {
+      await api.agentChat.stream(
+        projectId,
+        outgoing,
+        (chunk) => {
+          setMsgs((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === 'assistant') {
+              updated[updated.length - 1] = { ...last, content: last.content + chunk };
+            }
+            return updated;
+          });
+        },
+        abort.signal,
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      toast.error('Error en el chat: ' + (err instanceof Error ? err.message : 'Error desconocido'));
+      // Remove empty assistant placeholder on error
+      setMsgs((prev) => {
+        const last = prev[prev.length - 1];
+        return last?.role === 'assistant' && last.content === '' ? prev.slice(0, -1) : prev;
+      });
+    } finally {
+      setIsStreaming(false);
+      abortRef.current = null;
+    }
+  };
+
+  const saveAgent = async () => {
+    if (!detectedAgent) return;
+    setIsSaving(true);
+    try {
+      await api.claudeConfig.upsertAgent(projectId, detectedAgent.filename, {
+        name: detectedAgent.name,
+        description: detectedAgent.description || undefined,
+        body: detectedAgent.body,
+      });
+      toast.success(`Agente "${detectedAgent.name}" guardado en .claude/agents/`);
+      qc.invalidateQueries({ queryKey: qk.projectClaudeConfig(projectId) });
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(humanizeError(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void sendMessage();
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) abortRef.current?.abort();
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" aria-hidden />
+            <DialogTitle className="text-sm font-semibold">Crear agente con IA</DialogTitle>
+          </div>
+          <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
+            Describe el agente que necesitas. Claude te ayudará a diseñarlo y refinarlo.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Message list */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {msgs.length === 0 && (
+            <div className="flex h-full min-h-[200px] items-center justify-center">
+              <p className="max-w-xs text-center text-sm text-muted-foreground">
+                Describe qué tipo de agente necesitas. Por ejemplo: &ldquo;Necesito un agente
+                especializado en escribir tests de Vitest para TypeScript&rdquo;.
+              </p>
+            </div>
+          )}
+          {msgs.map((msg, i) => (
+            <ChatBubble key={i} msg={msg} />
+          ))}
+          {isStreaming && msgs[msgs.length - 1]?.content === '' && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              <span>Pensando…</span>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Detected agent banner */}
+        {detectedAgent && (
+          <div className="flex items-center justify-between gap-3 border-t border-primary/20 bg-primary/5 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground">
+                Agente listo:{' '}
+                <span className="text-primary">{detectedAgent.name}</span>
+              </p>
+              {detectedAgent.description && (
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {detectedAgent.description}
+                </p>
+              )}
+            </div>
+            <Button size="sm" onClick={() => void saveAgent()} disabled={isSaving} className="shrink-0">
+              {isSaving && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+              {isSaving ? 'Guardando…' : 'Guardar agente'}
+            </Button>
+          </div>
+        )}
+
+        {/* Input area */}
+        <div className="flex items-end gap-2 border-t border-border px-4 py-3">
+          <Textarea
+            className="min-h-[60px] max-h-[140px] flex-1 resize-none text-sm"
+            placeholder="Describe el agente… (Enter para enviar, Shift+Enter para nueva línea)"
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isStreaming}
+          />
+          <Button
+            size="sm"
+            className="h-[60px] shrink-0 px-3"
+            onClick={() => void sendMessage()}
+            disabled={!inputVal.trim() || isStreaming}
+            aria-label="Enviar mensaje"
+          >
+            {isStreaming ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <SendHorizontal className="size-4" />
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChatBubble({ msg }: { msg: ChatMsg }) {
+  if (msg.role === 'user') {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
+          {msg.content}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[92%]">
+        <AssistantContent content={msg.content} />
+      </div>
+    </div>
+  );
+}
+
+function AssistantContent({ content }: { content: string }) {
+  // Split on agent-definition blocks first, then generic code blocks
+  const parts = content.split(/(```agent-definition[\s\S]*?```)/);
+  return (
+    <div className="space-y-2 text-sm text-foreground">
+      {parts.map((part, i) => {
+        if (part.startsWith('```agent-definition')) {
+          const inner = part.replace(/^```agent-definition\n?/, '').replace(/\n?```$/, '');
+          return (
+            <div key={i} className="rounded-md border border-primary/25 bg-primary/5 p-3">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <Bot className="size-3 text-primary" aria-hidden />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                  Definición de agente
+                </span>
+              </div>
+              <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-xs text-foreground/90">
+                {inner}
+              </pre>
+            </div>
+          );
+        }
+        // Render generic code fences and plain text
+        const subParts = part.split(/(```[\s\S]*?```)/);
+        return (
+          <div key={i} className="whitespace-pre-wrap break-words leading-relaxed">
+            {subParts.map((sp, j) => {
+              if (sp.startsWith('```')) {
+                const code = sp.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
+                return (
+                  <pre
+                    key={j}
+                    className="my-1.5 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs"
+                  >
+                    {code}
+                  </pre>
+                );
+              }
+              return <span key={j}>{sp}</span>;
+            })}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
