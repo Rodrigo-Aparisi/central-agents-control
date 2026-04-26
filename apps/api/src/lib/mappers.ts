@@ -7,6 +7,7 @@ import type {
   RunEvent,
   RunParams,
   RunUsage,
+  RunWithProject,
   StatsDailyPoint,
 } from '@cac/shared';
 
@@ -45,6 +46,10 @@ export function runToApi(row: RunRow): Run {
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
   };
+}
+
+export function runWithProjectToApi(row: RunRow, projectName: string): RunWithProject {
+  return { ...runToApi(row), projectName };
 }
 
 export function eventToApi(row: RunEventRow): RunEvent {

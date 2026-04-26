@@ -1,4 +1,5 @@
 import { AgentsTab } from '@/components/agents/agents-tab';
+import { ActivityChart } from '@/components/dashboard/activity-chart';
 import { FileBrowser } from '@/components/files/file-browser';
 import { GitTab } from '@/components/git/git-panel';
 import { RunList } from '@/components/runs/run-list';
@@ -77,14 +78,19 @@ function ProjectDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="runs">
+      <Tabs defaultValue="overview">
         <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="agents">Agentes</TabsTrigger>
           <TabsTrigger value="settings">Ajustes</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview">
+          <ProjectOverviewTab projectId={p.id} />
+        </TabsContent>
 
         <TabsContent value="runs">
           <Card>
@@ -122,6 +128,109 @@ function ProjectDetailPage() {
       </Tabs>
     </div>
   );
+}
+
+// ─── Overview Tab ─────────────────────────────────────────────────────────────
+
+function ProjectOverviewTab({ projectId }: { projectId: string }) {
+  const stats = useQuery({
+    queryKey: qk.projectStats(projectId, 30),
+    queryFn: () => api.stats.byProject(projectId, { days: 30 }),
+    refetchInterval: 60_000,
+  });
+
+  if (stats.isPending) {
+    return (
+      <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {['a', 'b', 'c', 'd'].map((k) => (
+            <Card key={k}>
+              <CardContent className="h-[88px] animate-pulse bg-muted/30" />
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!stats.data) {
+    return <p className="text-sm text-destructive">No se pudieron cargar las métricas.</p>;
+  }
+
+  const t = stats.data.totals;
+  const totalTokens = t.inputTokens + t.outputTokens;
+
+  return (
+    <div className="space-y-4">
+      {/* Token KPIs */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="border-[var(--color-chart-2)]/30 bg-[var(--color-chart-2)]/5">
+          <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+            <span className="micro text-[var(--color-chart-2)]">Tokens totales</span>
+            <span className="tnum text-[32px] font-semibold leading-none text-[var(--color-chart-2)]">
+              {fmtTokens(totalTokens)}
+            </span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+            <span className="micro">Input tokens</span>
+            <span className="tnum text-[28px] font-medium leading-none">{fmtTokens(t.inputTokens)}</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+            <span className="micro">Output tokens</span>
+            <span className="tnum text-[28px] font-medium leading-none">{fmtTokens(t.outputTokens)}</span>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Meta KPIs */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+            <span className="micro">Coste estimado</span>
+            <span className="tnum text-[28px] font-medium leading-none">
+              ${t.estimatedCostUsd.toFixed(2)}
+            </span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+            <span className="micro">Runs totales</span>
+            <span className="tnum text-[28px] font-medium leading-none">{t.runs}</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+            <span className="micro">Completados / Fallidos</span>
+            <span className="tnum text-[28px] font-medium leading-none">
+              <span className="text-[var(--color-status-completed)]">{t.completed}</span>
+              <span className="text-muted-foreground text-[20px]"> / </span>
+              <span className="text-[var(--color-status-failed)]">{t.failed}</span>
+            </span>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Activity chart */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm font-medium">Actividad (últimos 30 días)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ActivityChart days={stats.data.days} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────

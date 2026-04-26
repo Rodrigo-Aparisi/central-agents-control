@@ -3,6 +3,7 @@ import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import type { Db } from '../client';
 import { isoTs, isoTsNullable } from '../lib/dates';
 import { newId } from '../lib/uuid';
+import { projects } from '../schema/projects';
 import { type RunInsert, type RunRow, runs } from '../schema/runs';
 
 function norm(row: RunRow): RunRow {
@@ -70,6 +71,25 @@ export function makeRunsRepo(db: Db) {
       const where = filters.length ? and(...filters) : undefined;
       const rows = await db.select().from(runs).where(where).orderBy(desc(runs.id)).limit(limit);
       return rows.map(norm);
+    },
+
+    async listWithProjectName({
+      status,
+      cursor,
+      limit,
+    }: Omit<ListRunsOptions, 'projectId'>): Promise<(RunRow & { projectName: string })[]> {
+      const filters = [];
+      if (status) filters.push(eq(runs.status, status));
+      if (cursor) filters.push(lt(runs.id, cursor));
+      const where = filters.length ? and(...filters) : undefined;
+      const rows = await db
+        .select()
+        .from(runs)
+        .leftJoin(projects, eq(runs.projectId, projects.id))
+        .where(where)
+        .orderBy(desc(runs.id))
+        .limit(limit);
+      return rows.map((r) => ({ ...norm(r.runs), projectName: r.projects?.name ?? '' }));
     },
 
     async insert(input: Omit<RunInsert, 'id' | 'createdAt'> & { id?: string }): Promise<RunRow> {

@@ -53,19 +53,30 @@ function DashboardPage() {
         <p className="text-sm text-destructive">No se pudieron cargar las métricas.</p>
       ) : (
         <>
+          {/* Token KPIs — protagonistas */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <KpiPrimary
+              label="Tokens totales"
+              value={formatTokens(data.totals.inputTokens + data.totals.outputTokens)}
+            />
+            <Kpi label="Input tokens" value={formatTokens(data.totals.inputTokens)} />
+            <Kpi label="Output tokens" value={formatTokens(data.totals.outputTokens)} />
+          </div>
+
+          {/* Meta KPIs */}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Kpi label="Coste estimado" value={`$${data.totals.estimatedCostUsd.toFixed(2)}`} />
             <Kpi label="Runs" value={data.totals.runs.toString()} />
             <Kpi label="Completados" value={data.totals.completed.toString()} />
             <Kpi label="Fallidos" value={data.totals.failed.toString()} />
-            <Kpi label="Coste estimado" value={`$${data.totals.estimatedCostUsd.toFixed(2)}`} />
           </div>
 
           <Card>
             <CardHeader className="flex-row items-center justify-between py-3">
               <CardTitle className="text-sm font-medium">Actividad</CardTitle>
               <div className="flex items-center gap-3 font-mono text-[11px] text-muted-foreground">
+                <LegendDot color="var(--color-chart-2)" label="Tokens diarios" />
                 <LegendDot color="var(--color-chart-1)" label="Runs" />
-                <LegendDot color="var(--color-chart-2)" label="Tokens acumulados" />
               </div>
             </CardHeader>
             <CardContent>
@@ -107,6 +118,25 @@ function Kpi({ label, value }: { label: string; value: string }) {
       </CardContent>
     </Card>
   );
+}
+
+function KpiPrimary({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="border-[var(--color-chart-2)]/30 bg-[var(--color-chart-2)]/5">
+      <CardContent className="flex h-[88px] flex-col justify-between px-5 py-4">
+        <span className="micro text-[var(--color-chart-2)]">{label}</span>
+        <span className="tnum text-[32px] font-semibold leading-none text-[var(--color-chart-2)]">
+          {value}
+        </span>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 function LegendDot({ color, label }: { color: string; label: string }) {

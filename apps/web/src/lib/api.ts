@@ -31,6 +31,7 @@ import type {
   RunEvent,
   RunGraphResponse,
   RunStatus,
+  RunWithProject,
   UpdateProjectInput,
   UpdateUserInput,
   UpsertAgentInput,
@@ -157,7 +158,10 @@ export const api = {
   // runs
   runs: {
     list: (params?: { projectId?: string; status?: RunStatus; cursor?: string; limit?: number }) =>
-      request<{ items: Run[]; nextCursor: string | null }>('GET', buildQuery('/v1/runs', params)),
+      request<{ items: RunWithProject[]; nextCursor: string | null }>(
+        'GET',
+        buildQuery('/v1/runs', params),
+      ),
     get: (id: string) => request<Run>('GET', `/v1/runs/${id}`),
     byProject: (projectId: string, params?: { cursor?: string; limit?: number }) =>
       request<{ items: Run[]; nextCursor: string | null }>(

@@ -63,6 +63,11 @@ export const Run = z.object({
 });
 export type Run = z.infer<typeof Run>;
 
+export const RunWithProject = Run.extend({
+  projectName: z.string(),
+});
+export type RunWithProject = z.infer<typeof RunWithProject>;
+
 export const Artifact = z.object({
   id: UuidV7,
   runId: UuidV7,

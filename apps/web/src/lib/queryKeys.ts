@@ -17,6 +17,9 @@ export const qk = {
   adminUsers: () => ['cac', 'admin', 'users'] as const,
   adminAudit: (params?: { userId?: string }) => ['cac', 'admin', 'audit', params ?? {}] as const,
 
+  // stats
+  projectStats: (id: string, days?: number) => ['cac', 'projects', id, 'stats', days ?? 30] as const,
+
   // filesystem browser
   fsBrowse: (path?: string) => ['cac', 'fs', 'browse', path ?? null] as const,
 

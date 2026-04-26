@@ -5,6 +5,7 @@ import {
   LaunchRunInput,
   LaunchRunResponse,
   Run,
+  RunWithProject,
   type RunParams,
   RunStatus,
   UuidV7,
@@ -13,10 +14,15 @@ import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { runToApi } from '../lib/mappers';
+import { runToApi, runWithProjectToApi } from '../lib/mappers';
 
 const RunList = z.object({
   items: z.array(Run),
+  nextCursor: z.string().nullable(),
+});
+
+const RunWithProjectList = z.object({
+  items: z.array(RunWithProject),
   nextCursor: z.string().nullable(),
 });
 
@@ -35,13 +41,20 @@ export const runRoutes = fp(
     app.get(
       '/v1/runs',
       {
-        schema: { querystring: ListQuery, response: { 200: RunList } },
+        schema: { querystring: ListQuery, response: { 200: RunWithProjectList } },
         preHandler: [fastify.requireAuth],
       },
       async (req) => {
         const { cursor, limit, projectId, status } = req.query;
-        const rows = await fastify.db.runs.list({ cursor, limit, projectId, status });
-        const items = rows.map(runToApi);
+        if (projectId) {
+          // Project-scoped — projectName is implicit; use plain list for efficiency
+          const rows = await fastify.db.runs.list({ cursor, limit, projectId, status });
+          const items = rows.map((r) => runWithProjectToApi(r, ''));
+          const nextCursor = rows.length === limit ? (rows[rows.length - 1]?.id ?? null) : null;
+          return { items, nextCursor };
+        }
+        const rows = await fastify.db.runs.listWithProjectName({ cursor, limit, status });
+        const items = rows.map((r) => runWithProjectToApi(r, r.projectName));
         const nextCursor = rows.length === limit ? (rows[rows.length - 1]?.id ?? null) : null;
         return { items, nextCursor };
       },

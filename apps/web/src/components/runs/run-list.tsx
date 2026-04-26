@@ -5,6 +5,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { RunStatusBadge } from './run-status-badge';
 
+type RunWithOptionalProject = Run & { projectName?: string };
+
 const DATE_FMT = new Intl.DateTimeFormat('es-ES', {
   day: '2-digit',
   month: '2-digit',
@@ -20,25 +22,21 @@ function fmtDate(iso: string): string {
 }
 
 interface Props {
-  runs: Run[];
+  runs: RunWithOptionalProject[];
   emptyMessage?: string;
+  showProject?: boolean;
 }
 
-interface RunTree {
-  run: Run;
-  children: Run[];
-}
-
-export function RunList({ runs, emptyMessage = 'Sin runs todavía.' }: Props) {
+export function RunList({ runs, emptyMessage = 'Sin runs todavía.', showProject = false }: Props) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   type DisplayItem =
-    | { kind: 'parent'; run: Run; children: Run[] }
-    | { kind: 'orphan'; run: Run };
+    | { kind: 'parent'; run: RunWithOptionalProject; children: RunWithOptionalProject[] }
+    | { kind: 'orphan'; run: RunWithOptionalProject };
 
   const displayItems = useMemo<DisplayItem[]>(() => {
     const parentIds = new Set(runs.filter((r) => r.parentRunId === null).map((r) => r.id));
-    const childrenMap = new Map<string, Run[]>();
+    const childrenMap = new Map<string, RunWithOptionalProject[]>();
 
     for (const run of runs) {
       if (run.parentRunId !== null) {
@@ -82,6 +80,9 @@ export function RunList({ runs, emptyMessage = 'Sin runs todavía.' }: Props) {
         <thead className="bg-muted/60 text-muted-foreground">
           <tr>
             <th className="px-3 py-2 text-left font-medium">Fecha / Descripción</th>
+            {showProject && (
+              <th className="px-3 py-2 text-left font-medium">Proyecto</th>
+            )}
             <th className="px-3 py-2 text-left font-medium">Estado</th>
             <th className="px-3 py-2 text-left font-medium">Duración</th>
             <th className="px-3 py-2 text-left font-medium">Tokens</th>
@@ -91,7 +92,7 @@ export function RunList({ runs, emptyMessage = 'Sin runs todavía.' }: Props) {
         <tbody>
           {displayItems.flatMap((item) => {
             if (item.kind === 'orphan') {
-              return [<SubRunRow key={item.run.id} run={item.run} />];
+              return [<SubRunRow key={item.run.id} run={item.run} showProject={showProject} />];
             }
             const { run, children } = item;
             const isExpanded = expandedIds.has(run.id);
@@ -103,9 +104,12 @@ export function RunList({ runs, emptyMessage = 'Sin runs todavía.' }: Props) {
                 childCount={children.length}
                 isExpanded={isExpanded}
                 onToggle={hasChildren ? () => toggle(run.id) : undefined}
+                showProject={showProject}
               />,
               ...(isExpanded
-                ? children.map((child) => <SubRunRow key={child.id} run={child} isNested />)
+                ? children.map((child) => (
+                    <SubRunRow key={child.id} run={child} isNested showProject={showProject} />
+                  ))
                 : []),
             ];
           })}
@@ -122,11 +126,13 @@ function ParentRow({
   childCount,
   isExpanded,
   onToggle,
+  showProject,
 }: {
-  run: Run;
+  run: RunWithOptionalProject;
   childCount: number;
   isExpanded: boolean;
   onToggle?: () => void;
+  showProject: boolean;
 }) {
   return (
     <tr className="border-t border-border hover:bg-accent/40">
@@ -154,6 +160,21 @@ function ParentRow({
           </span>
         </div>
       </td>
+      {showProject && (
+        <td className="px-3 py-2">
+          {r.projectName ? (
+            <Link
+              to="/projects/$id"
+              params={{ id: r.projectId }}
+              className="max-w-[160px] truncate font-mono text-xs text-primary underline-offset-4 hover:underline block"
+            >
+              {r.projectName}
+            </Link>
+          ) : (
+            <span className="font-mono text-xs text-muted-foreground/50">—</span>
+          )}
+        </td>
+      )}
       <td className="px-3 py-2">
         <RunStatusBadge status={r.status} />
       </td>
@@ -178,7 +199,15 @@ function ParentRow({
 
 // ─── Sub-run row ──────────────────────────────────────────────────────────────
 
-function SubRunRow({ run: r, isNested = false }: { run: Run; isNested?: boolean }) {
+function SubRunRow({
+  run: r,
+  isNested = false,
+  showProject,
+}: {
+  run: RunWithOptionalProject;
+  isNested?: boolean;
+  showProject: boolean;
+}) {
   return (
     <tr
       className={cn(
@@ -209,6 +238,21 @@ function SubRunRow({ run: r, isNested = false }: { run: Run; isNested?: boolean 
           </span>
         </div>
       </td>
+      {showProject && (
+        <td className="px-3 py-1.5">
+          {r.projectName ? (
+            <Link
+              to="/projects/$id"
+              params={{ id: r.projectId }}
+              className="max-w-[160px] truncate font-mono text-[11px] text-muted-foreground underline-offset-4 hover:underline block"
+            >
+              {r.projectName}
+            </Link>
+          ) : (
+            <span />
+          )}
+        </td>
+      )}
       <td className="px-3 py-1.5">
         <RunStatusBadge status={r.status} />
       </td>

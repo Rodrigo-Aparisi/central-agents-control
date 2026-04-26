@@ -42,7 +42,7 @@ function RunsIndexPage() {
           ) : isError ? (
             <p className="text-sm text-destructive">Error al cargar.</p>
           ) : (
-            <RunList runs={data?.items ?? []} />
+            <RunList runs={data?.items ?? []} showProject />
           )}
         </CardContent>
       </Card>

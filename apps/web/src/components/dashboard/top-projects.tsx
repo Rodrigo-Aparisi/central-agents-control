@@ -14,13 +14,13 @@ export function TopProjects({ topProjects }: Props) {
     );
   }
 
-  const maxRuns = Math.max(...topProjects.map((p) => p.runs));
+  const maxTokens = Math.max(...topProjects.map((p) => p.inputTokens + p.outputTokens));
 
   return (
     <ul className="space-y-2.5">
       {topProjects.map((p) => {
-        const pct = maxRuns > 0 ? (p.runs / maxRuns) * 100 : 0;
         const tokens = p.inputTokens + p.outputTokens;
+        const pct = maxTokens > 0 ? (tokens / maxTokens) * 100 : 0;
         return (
           <li key={p.projectId} className="space-y-1">
             <div className="flex items-center justify-between gap-4">
@@ -32,12 +32,12 @@ export function TopProjects({ topProjects }: Props) {
                 {p.name}
               </Link>
               <span className="tnum shrink-0 font-mono text-[11px] text-muted-foreground">
-                {p.runs} runs · {formatTokens(tokens)} tok
+                {formatTokens(tokens)} tok · {p.runs} runs
               </span>
             </div>
-            <div className="relative h-[3px] w-full rounded-full bg-[var(--color-chart-1)]/15">
+            <div className="relative h-[3px] w-full rounded-full bg-[var(--color-chart-2)]/15">
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-chart-1)]"
+                className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-chart-2)]"
                 style={{ width: `${pct}%` }}
               />
             </div>

@@ -2,7 +2,6 @@ import { useThemeColors } from '@/hooks/useThemeColors';
 import type { StatsDailyPoint } from '@cac/shared';
 import { useMemo } from 'react';
 import {
-  Area,
   Bar,
   CartesianGrid,
   ComposedChart,
@@ -22,25 +21,18 @@ interface ChartRow {
   label: string;
   runs: number;
   tokens: number;
-  tokensAcc: number;
 }
 
 export function ActivityChart({ days }: Props) {
   const c = useThemeColors();
 
   const data = useMemo<ChartRow[]>(() => {
-    let acc = 0;
-    return days.map((d) => {
-      const tokens = d.inputTokens + d.outputTokens;
-      acc += tokens;
-      return {
-        date: d.date,
-        label: d.date.slice(5),
-        runs: d.runs,
-        tokens,
-        tokensAcc: acc,
-      };
-    });
+    return days.map((d) => ({
+      date: d.date,
+      label: d.date.slice(5),
+      runs: d.runs,
+      tokens: d.inputTokens + d.outputTokens,
+    }));
   }, [days]);
 
   if (data.length === 0) {
@@ -68,8 +60,8 @@ export function ActivityChart({ days }: Props) {
             tick={{ fontSize: 10, fontFamily: 'var(--font-mono)', fill: c.mutedForeground }}
             tickLine={false}
             axisLine={false}
-            width={28}
-            allowDecimals={false}
+            width={40}
+            tickFormatter={formatTokens}
           />
           <YAxis
             yAxisId="right"
@@ -77,32 +69,24 @@ export function ActivityChart({ days }: Props) {
             tick={{ fontSize: 10, fontFamily: 'var(--font-mono)', fill: c.mutedForeground }}
             tickLine={false}
             axisLine={false}
-            width={40}
-            tickFormatter={formatTokens}
+            width={28}
+            allowDecimals={false}
           />
           <Tooltip content={<ActivityTooltip />} cursor={{ fill: c.ruleSoft, opacity: 0.4 }} />
           <Bar
             yAxisId="left"
-            dataKey="runs"
-            fill={c.chart1}
-            radius={[2, 2, 0, 0]}
-            isAnimationActive={false}
-          />
-          <Area
-            yAxisId="right"
-            dataKey="tokensAcc"
+            dataKey="tokens"
             fill={c.chart2}
-            fillOpacity={0.06}
-            stroke="none"
+            radius={[2, 2, 0, 0]}
             isAnimationActive={false}
           />
           <Line
             yAxisId="right"
-            dataKey="tokensAcc"
-            stroke={c.chart2}
+            dataKey="runs"
+            stroke={c.chart1}
             strokeWidth={1.5}
             dot={false}
-            activeDot={{ r: 3, fill: c.chart2 }}
+            activeDot={{ r: 3, fill: c.chart1 }}
             isAnimationActive={false}
           />
         </ComposedChart>
@@ -131,10 +115,6 @@ function ActivityTooltip({ active, payload }: TooltipProps) {
       <div className="tnum flex justify-between gap-4">
         <span className="text-muted-foreground">tokens</span>
         <span className="text-foreground">{formatTokens(row.tokens)}</span>
-      </div>
-      <div className="tnum flex justify-between gap-4">
-        <span className="text-muted-foreground">acc</span>
-        <span className="text-foreground">{formatTokens(row.tokensAcc)}</span>
       </div>
     </div>
   );
