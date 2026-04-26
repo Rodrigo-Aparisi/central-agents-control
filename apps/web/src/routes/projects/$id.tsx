@@ -1,4 +1,5 @@
 import { AgentsTab } from '@/components/agents/agents-tab';
+import { ChatPanel } from '@/components/chat/chat-panel';
 import { ActivityChart } from '@/components/dashboard/activity-chart';
 import { FileBrowser } from '@/components/files/file-browser';
 import { GitTab } from '@/components/git/git-panel';
@@ -82,6 +83,7 @@ function ProjectDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="agents">Agentes</TabsTrigger>
@@ -108,6 +110,10 @@ function ProjectDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="chat" className="mt-0">
+          <ChatPanel projectId={p.id} />
         </TabsContent>
 
         <TabsContent value="files">

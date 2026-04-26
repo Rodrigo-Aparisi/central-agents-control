@@ -1,0 +1,257 @@
+import { cn } from '@/lib/cn';
+
+interface MarkdownProps {
+  content: string;
+  className?: string;
+}
+
+export function Markdown({ content, className }: MarkdownProps) {
+  const blocks = parseBlocks(content);
+
+  return (
+    <div
+      className={cn(
+        'prose-chat text-sm leading-relaxed',
+        '[&>*+*]:mt-3',
+        className,
+      )}
+    >
+      {blocks.map((block, i) => (
+        <Block key={i} block={block} />
+      ))}
+    </div>
+  );
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type BlockNode =
+  | { type: 'paragraph'; inline: InlineNode[] }
+  | { type: 'heading'; level: 1 | 2 | 3 | 4; inline: InlineNode[] }
+  | { type: 'code'; lang: string; content: string }
+  | { type: 'ul'; items: InlineNode[][] }
+  | { type: 'ol'; items: InlineNode[][] }
+  | { type: 'hr' };
+
+type InlineNode =
+  | { type: 'text'; value: string }
+  | { type: 'code'; value: string }
+  | { type: 'bold'; value: string }
+  | { type: 'italic'; value: string }
+  | { type: 'bold-italic'; value: string };
+
+// ─── Block parser ─────────────────────────────────────────────────────────────
+
+function parseBlocks(src: string): BlockNode[] {
+  const lines = src.split('\n');
+  const blocks: BlockNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i]!;
+
+    // Fenced code block
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim();
+      const content: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i]!.startsWith('```')) {
+        content.push(lines[i]!);
+        i++;
+      }
+      i++; // consume closing ```
+      blocks.push({ type: 'code', lang, content: content.join('\n') });
+      continue;
+    }
+
+    // Heading
+    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push({
+        type: 'heading',
+        level: Math.min(headingMatch[1]!.length, 4) as 1 | 2 | 3 | 4,
+        inline: parseInline(headingMatch[2]!),
+      });
+      i++;
+      continue;
+    }
+
+    // HR
+    if (/^[-*_]{3,}$/.test(line.trim())) {
+      blocks.push({ type: 'hr' });
+      i++;
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*+]\s/.test(line)) {
+      const items: InlineNode[][] = [];
+      while (i < lines.length && /^[-*+]\s/.test(lines[i]!)) {
+        items.push(parseInline(lines[i]!.replace(/^[-*+]\s/, '')));
+        i++;
+      }
+      blocks.push({ type: 'ul', items });
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\.\s/.test(line)) {
+      const items: InlineNode[][] = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i]!)) {
+        items.push(parseInline(lines[i]!.replace(/^\d+\.\s/, '')));
+        i++;
+      }
+      blocks.push({ type: 'ol', items });
+      continue;
+    }
+
+    // Empty line — skip
+    if (line.trim() === '') {
+      i++;
+      continue;
+    }
+
+    // Paragraph — accumulate until blank or block-start
+    const paraLines: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i]!.trim() !== '' &&
+      !lines[i]!.startsWith('```') &&
+      !lines[i]!.startsWith('#') &&
+      !/^[-*+]\s/.test(lines[i]!) &&
+      !/^\d+\.\s/.test(lines[i]!) &&
+      !/^[-*_]{3,}$/.test(lines[i]!.trim())
+    ) {
+      paraLines.push(lines[i]!);
+      i++;
+    }
+    if (paraLines.length > 0) {
+      blocks.push({ type: 'paragraph', inline: parseInline(paraLines.join(' ')) });
+    }
+  }
+
+  return blocks;
+}
+
+// ─── Inline parser ────────────────────────────────────────────────────────────
+
+function parseInline(src: string): InlineNode[] {
+  const nodes: InlineNode[] = [];
+  // Patterns: bold-italic, bold, italic, inline-code
+  const pattern = /(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|_[^_]+_|\*[^*]+\*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = pattern.exec(src)) !== null) {
+    if (m.index > last) nodes.push({ type: 'text', value: src.slice(last, m.index) });
+    const token = m[0]!;
+    if (token.startsWith('`')) {
+      nodes.push({ type: 'code', value: token.slice(1, -1) });
+    } else if (token.startsWith('***') || token.startsWith('___')) {
+      nodes.push({ type: 'bold-italic', value: token.slice(3, -3) });
+    } else if (token.startsWith('**') || token.startsWith('__')) {
+      nodes.push({ type: 'bold', value: token.slice(2, -2) });
+    } else {
+      nodes.push({ type: 'italic', value: token.slice(1, -1) });
+    }
+    last = m.index + token.length;
+  }
+  if (last < src.length) nodes.push({ type: 'text', value: src.slice(last) });
+  return nodes;
+}
+
+// ─── Renderers ────────────────────────────────────────────────────────────────
+
+function Inline({ nodes }: { nodes: InlineNode[] }) {
+  return (
+    <>
+      {nodes.map((n, i) => {
+        switch (n.type) {
+          case 'code':
+            return (
+              <code
+                key={i}
+                className="rounded bg-muted px-1 py-0.5 font-mono text-[0.8em] text-foreground"
+              >
+                {n.value}
+              </code>
+            );
+          case 'bold':
+            return <strong key={i} className="font-semibold">{n.value}</strong>;
+          case 'italic':
+            return <em key={i}>{n.value}</em>;
+          case 'bold-italic':
+            return (
+              <strong key={i} className="font-semibold">
+                <em>{n.value}</em>
+              </strong>
+            );
+          default:
+            return <span key={i}>{n.value}</span>;
+        }
+      })}
+    </>
+  );
+}
+
+function Block({ block }: { block: BlockNode }) {
+  switch (block.type) {
+    case 'heading': {
+      const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3' | 'h4';
+      const cls = cn(
+        'font-semibold leading-tight',
+        block.level === 1 && 'text-base',
+        block.level === 2 && 'text-[0.95rem]',
+        block.level >= 3 && 'text-sm',
+      );
+      return (
+        <Tag className={cls}>
+          <Inline nodes={block.inline} />
+        </Tag>
+      );
+    }
+    case 'paragraph':
+      return (
+        <p className="leading-relaxed">
+          <Inline nodes={block.inline} />
+        </p>
+      );
+    case 'code':
+      return (
+        <div className="overflow-hidden rounded-md border border-border">
+          {block.lang && (
+            <div className="border-b border-border bg-muted/60 px-3 py-1 font-mono text-[10px] text-muted-foreground">
+              {block.lang}
+            </div>
+          )}
+          <pre className="overflow-x-auto bg-muted/30 p-3 font-mono text-xs leading-relaxed">
+            <code>{block.content}</code>
+          </pre>
+        </div>
+      );
+    case 'ul':
+      return (
+        <ul className="space-y-0.5 pl-4">
+          {block.items.map((item, i) => (
+            <li key={i} className="list-disc">
+              <Inline nodes={item} />
+            </li>
+          ))}
+        </ul>
+      );
+    case 'ol':
+      return (
+        <ol className="space-y-0.5 pl-4">
+          {block.items.map((item, i) => (
+            <li key={i} className="list-decimal">
+              <Inline nodes={item} />
+            </li>
+          ))}
+        </ol>
+      );
+    case 'hr':
+      return <hr className="border-border" />;
+    default:
+      return null;
+  }
+}

@@ -25,4 +25,9 @@ export const qk = {
 
   // Claude Code project config
   projectClaudeConfig: (id: string) => ['cac', 'projects', id, 'claude-config'] as const,
+
+  // Chat
+  chatSessions: (projectId: string) => ['cac', 'projects', projectId, 'chats'] as const,
+  chatMessages: (projectId: string, sessionId: string) =>
+    ['cac', 'projects', projectId, 'chats', sessionId, 'messages'] as const,
 } as const;

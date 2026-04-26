@@ -4,8 +4,11 @@ import type {
   Artifact,
   AuditEventRow,
   AuthTokensResponse,
+  ChatMessage,
+  ChatSession,
   ClaudeAgentEntry,
   ClaudeConfigResponse,
+  CreateChatSessionInput,
   CreateProjectInput,
   CreateUserInput,
   DirEntry,
@@ -32,6 +35,7 @@ import type {
   RunGraphResponse,
   RunStatus,
   RunWithProject,
+  SendChatMessageInput,
   UpdateProjectInput,
   UpdateUserInput,
   UpsertAgentInput,
@@ -248,6 +252,80 @@ export const api = {
         'DELETE',
         `/v1/projects/${projectId}/claude-config/agents/${filename}`,
       ),
+  },
+
+  // chat sessions
+  chat: {
+    listSessions: (projectId: string) =>
+      request<{ items: ChatSession[] }>('GET', `/v1/projects/${projectId}/chats`),
+    createSession: (projectId: string, input?: CreateChatSessionInput) =>
+      request<ChatSession>('POST', `/v1/projects/${projectId}/chats`, input ?? {}),
+    deleteSession: (projectId: string, sessionId: string) =>
+      request<void>('DELETE', `/v1/projects/${projectId}/chats/${sessionId}`),
+    listMessages: (projectId: string, sessionId: string) =>
+      request<{ items: ChatMessage[] }>(
+        'GET',
+        `/v1/projects/${projectId}/chats/${sessionId}/messages`,
+      ),
+    sendMessage: async (
+      projectId: string,
+      sessionId: string,
+      input: SendChatMessageInput,
+      onChunk: (text: string) => void,
+      signal?: AbortSignal,
+    ): Promise<void> => {
+      const token = useAuthStore.getState().accessToken;
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (token) headers.authorization = `Bearer ${token}`;
+
+      const res = await fetch(
+        `${BASE_URL}/v1/projects/${projectId}/chats/${sessionId}/send`,
+        {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(input),
+          signal,
+        },
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        let message = `HTTP ${res.status}`;
+        try {
+          message = (JSON.parse(text) as ApiErrorBody).error.message ?? message;
+        } catch {
+          /* ignore */
+        }
+        throw new ApiError(res.status, { code: 'INTERNAL' as const, message });
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6)) as {
+              text?: string;
+              done?: boolean;
+              error?: string;
+            };
+            if (data.error) throw new ApiError(500, { code: 'INTERNAL' as const, message: data.error });
+            if (data.text) onChunk(data.text);
+          } catch (e) {
+            if (e instanceof ApiError) throw e;
+          }
+        }
+      }
+    },
   },
 
   agentChat: {

@@ -199,6 +199,8 @@ vi.mock('../src/plugins/db', async () => {
         users: {} as never,
         refreshTokens: {} as never,
         auditEvents: {} as never,
+        chatSessions: {} as never,
+        chatMessages: {} as never,
         transaction: (async () => undefined) as never,
         ping: async () => true,
         close: async () => {},

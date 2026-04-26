@@ -349,3 +349,39 @@ export const UpsertAgentInput = z.object({
   body: z.string().max(200_000),
 });
 export type UpsertAgentInput = z.infer<typeof UpsertAgentInput>;
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+export const ChatSession = z.object({
+  id: UuidV7,
+  projectId: UuidV7,
+  title: z.string(),
+  messageCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+});
+export type ChatSession = z.infer<typeof ChatSession>;
+
+export const ChatMessageRole = z.enum(['user', 'assistant']);
+export type ChatMessageRole = z.infer<typeof ChatMessageRole>;
+
+export const ChatMessage = z.object({
+  id: UuidV7,
+  sessionId: UuidV7,
+  role: ChatMessageRole,
+  content: z.string(),
+  seq: z.number().int().nonnegative(),
+  createdAt: z.string().datetime({ offset: true }),
+});
+export type ChatMessage = z.infer<typeof ChatMessage>;
+
+export const CreateChatSessionInput = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+});
+export type CreateChatSessionInput = z.infer<typeof CreateChatSessionInput>;
+
+export const SendChatMessageInput = z.object({
+  content: z.string().trim().min(1).max(50_000),
+  model: z.string().trim().max(100).optional(),
+});
+export type SendChatMessageInput = z.infer<typeof SendChatMessageInput>;

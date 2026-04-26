@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { type CreateDbOptions, type Db, type DbHandle, createPgClient } from './client';
 import { type AuditEventsRepo, makeAuditEventsRepo } from './repos/audit-events';
+import { type ChatMessagesRepo, makeChatMessagesRepo } from './repos/chat-messages';
+import { type ChatSessionsRepo, makeChatSessionsRepo } from './repos/chat-sessions';
 import { type ProjectsRepo, makeProjectsRepo } from './repos/projects';
 import { type RefreshTokensRepo, makeRefreshTokensRepo } from './repos/refresh-tokens';
 import { type RunArtifactsRepo, makeRunArtifactsRepo } from './repos/run-artifacts';
@@ -30,6 +32,8 @@ export interface CacDb {
   users: UsersRepo;
   refreshTokens: RefreshTokensRepo;
   auditEvents: AuditEventsRepo;
+  chatSessions: ChatSessionsRepo;
+  chatMessages: ChatMessagesRepo;
   transaction: Db['transaction'];
   ping: () => Promise<boolean>;
   close: () => Promise<void>;
@@ -48,6 +52,8 @@ export function createDb(opts: CreateDbOptions): CacDb {
     users: makeUsersRepo(db),
     refreshTokens: makeRefreshTokensRepo(db),
     auditEvents: makeAuditEventsRepo(db),
+    chatSessions: makeChatSessionsRepo(db),
+    chatMessages: makeChatMessagesRepo(db),
     transaction: db.transaction.bind(db),
     ping: async () => {
       await db.execute(sql`select 1`);

@@ -125,6 +125,8 @@ vi.mock('../src/plugins/db', async () => {
             return {} as never;
           },
         } as never,
+        chatSessions: {} as never,
+        chatMessages: {} as never,
         transaction: (async () => undefined) as never,
         ping: async () => true,
         close: async () => {},

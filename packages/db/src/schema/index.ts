@@ -6,3 +6,5 @@ export * from './run-artifacts';
 export * from './users';
 export * from './refresh-tokens';
 export * from './audit-events';
+export * from './chat-sessions';
+export * from './chat-messages';
