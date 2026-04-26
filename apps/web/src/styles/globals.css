@@ -52,6 +52,8 @@
 @layer base {
   * {
     border-color: var(--color-border);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(45, 212, 191, 0.2) transparent;
   }
   html {
     font-family: var(--font-sans);
@@ -63,6 +65,25 @@
   }
   button {
     cursor: pointer;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(45, 212, 191, 0.2);
+    border-radius: 9999px;
+    transition: background 0.2s;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(45, 212, 191, 0.45);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 

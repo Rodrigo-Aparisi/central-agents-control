@@ -47,6 +47,7 @@ export function MessageInput({
 
   return (
     <div className="border-t border-border bg-background/80 backdrop-blur-sm px-4 py-3">
+      <div className="mx-auto w-full max-w-[80%]">
       {isStreaming && (
         <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-flex gap-1">
@@ -112,6 +113,7 @@ export function MessageInput({
       <p className="mt-1.5 text-center text-[10px] text-muted-foreground/40">
         Claude puede cometer errores. Verifica la información importante.
       </p>
+      </div>
     </div>
   );
 }

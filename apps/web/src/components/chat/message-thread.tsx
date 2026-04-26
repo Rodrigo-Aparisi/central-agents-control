@@ -43,8 +43,8 @@ export function MessageThread({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-4">
-      <div className="space-y-5">
+    <div className="flex-1 overflow-y-auto py-6">
+      <div className="mx-auto w-full max-w-[80%] space-y-5">
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
