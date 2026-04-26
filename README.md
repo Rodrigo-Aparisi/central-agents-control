@@ -8,7 +8,11 @@ Dashboard web para orquestar múltiples proyectos desarrollados con Claude Code.
 
 ## Qué hace
 
-Flujo típico: abres el browser, eliges un proyecto local, escribes un prompt, el wrapper lanza `claude -p --output-format stream-json` con `cwd` fijo al proyecto, el log aparece en vivo (Socket.IO) y al terminar ves el diff de archivos modificados. Todo queda persistido — runs, eventos, artefactos — con métricas agregadas por día.
+Cada proyecto tiene dos modos de trabajo complementarios:
+
+**Runs** — tareas autónomas. Escribes un prompt, el wrapper lanza `claude -p --output-format stream-json` con `cwd` fijo al proyecto, el log aparece en vivo (Socket.IO) y al terminar ves el diff de archivos modificados. Todo queda persistido — runs, eventos, artefactos — con métricas agregadas por día.
+
+**Chat** — conversación persistente. Un panel de chat libre por proyecto donde puedes razonar sobre decisiones, iterar en conceptos o consultar cualquier cosa antes de lanzar un run. Las conversaciones se guardan en DB (múltiples hilos por proyecto), Claude responde con streaming token a token, y las respuestas se renderizan con Markdown completo (tablas, código, listas, negritas). El historial se pasa como contexto en cada turno.
 
 En modo multiusuario (v2): cada acción pasa por un JWT firmado, los admins gestionan usuarios desde `/admin/users`, y cada operación queda trazada en el audit log accesible en `/admin/audit`.
 
@@ -100,7 +104,7 @@ docker compose ps   # espera a que ambos estén "healthy"
 pnpm db:migrate
 ```
 
-Crea las tablas `projects`, `runs`, `run_events`, `run_artifacts`, `users`, `refresh_tokens`, `audit_events`, enums e índices. **Imprescindible antes del primer arranque.**
+Crea las tablas `projects`, `runs`, `run_events`, `run_artifacts`, `users`, `refresh_tokens`, `audit_events`, `chat_sessions`, `chat_messages`, enums e índices. **Imprescindible antes del primer arranque.**
 
 ### 5. Arrancar
 
@@ -253,6 +257,8 @@ pnpm --filter @cac/web e2e    # Playwright golden path (API mockada)
 
 E2E Playwright: 1 golden path (projects list → project detail → run detail) contra API mockada vía `page.route`.
 
+> El test de `renderPayload` en `log-viewer.test.tsx` falla en la rama actual — bug preexistente no relacionado con el chat.
+
 ---
 
 ## Seguridad
@@ -279,6 +285,21 @@ Resumen — detalle en [`docs/spec/03-security.md`](docs/spec/03-security.md).
 - Orquestación (BullMQ + runner + Socket.IO): [`docs/spec/04-orchestration.md`](docs/spec/04-orchestration.md)
 - Features v2: [`docs/spec/08-features-v2.md`](docs/spec/08-features-v2.md)
 - Decisiones: [`docs/memory/decisions.md`](docs/memory/decisions.md)
+
+### Chat — flujo técnico resumido
+
+```
+Browser → POST /v1/projects/:id/chats/:sessionId/send
+  → persiste user message en chat_messages
+  → auto-titula la sesión si es el primer mensaje
+  → construye prompt (system + historial previo)
+  → startRunner() → claude -p --output-format stream-json
+  → SSE chunks (data: {"text":"..."}) al cliente
+  → al completar: persiste assistant message, touch() sesión
+  → frontend invalida queries → rerender desde DB
+```
+
+Tablas: `chat_sessions` (1 por hilo, FK → projects cascade) + `chat_messages` (N por sesión, FK → chat_sessions cascade, campo `seq` para orden garantizado).
 
 ## Contribuir
 
