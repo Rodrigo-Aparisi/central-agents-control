@@ -1,4 +1,5 @@
-import { desc, eq } from 'drizzle-orm';
+import type { RunUsage } from '@cac/shared';
+import { desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../client';
 import { isoTs } from '../lib/dates';
 import { newId } from '../lib/uuid';
@@ -49,6 +50,22 @@ export function makeChatSessionsRepo(db: Db) {
         .update(chatSessions)
         .set({ updatedAt: new Date().toISOString() })
         .where(eq(chatSessions.id, id));
+    },
+
+    async addUsage(id: string, incoming: RunUsage): Promise<void> {
+      await db.execute(sql`
+        UPDATE chat_sessions
+        SET
+          usage = jsonb_build_object(
+            'inputTokens',      COALESCE((usage->>'inputTokens')::bigint,      0) + ${incoming.inputTokens},
+            'outputTokens',     COALESCE((usage->>'outputTokens')::bigint,     0) + ${incoming.outputTokens},
+            'cacheReadTokens',  COALESCE((usage->>'cacheReadTokens')::bigint,  0) + ${incoming.cacheReadTokens},
+            'cacheWriteTokens', COALESCE((usage->>'cacheWriteTokens')::bigint, 0) + ${incoming.cacheWriteTokens},
+            'estimatedCostUsd', COALESCE((usage->>'estimatedCostUsd')::numeric, 0) + ${incoming.estimatedCostUsd}
+          ),
+          updated_at = now()
+        WHERE id = ${id}::uuid
+      `);
     },
 
     async delete(id: string): Promise<boolean> {

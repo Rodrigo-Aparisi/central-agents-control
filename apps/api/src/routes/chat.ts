@@ -225,15 +225,17 @@ IMPORTANT: Respond ONLY with plain text/markdown. Do NOT use any tools (Bash, Re
           const result = await handle.result;
 
           if (result.reason === 'completed' && assistantContent.length > 0) {
-            // Persist assistant response
+            // Persist assistant response + token usage
             const assistantSeq = nextSeq + 1;
-            await fastify.db.chatMessages.insert({
-              sessionId: req.params.sessionId,
-              role: 'assistant',
-              content: assistantContent,
-              seq: assistantSeq,
-            });
-            await fastify.db.chatSessions.touch(req.params.sessionId);
+            await Promise.all([
+              fastify.db.chatMessages.insert({
+                sessionId: req.params.sessionId,
+                role: 'assistant',
+                content: assistantContent,
+                seq: assistantSeq,
+              }),
+              fastify.db.chatSessions.addUsage(req.params.sessionId, result.usage),
+            ]);
             reply.raw.write('data: {"done":true}\n\n');
           } else if (result.reason !== 'completed') {
             const msg = result.error?.message ?? result.reason;

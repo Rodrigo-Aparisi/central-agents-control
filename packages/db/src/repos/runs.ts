@@ -128,16 +128,43 @@ export function makeRunsRepo(db: Db) {
         cost: number;
       }>(sql`
         SELECT
-          to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
-          COUNT(*)::int AS runs,
-          SUM((status = 'completed')::int)::int AS completed,
-          SUM((status IN ('failed','timeout','cancelled'))::int)::int AS failed,
-          COALESCE(SUM(((usage ->> 'inputTokens')::bigint))::int, 0) AS input_tokens,
-          COALESCE(SUM(((usage ->> 'outputTokens')::bigint))::int, 0) AS output_tokens,
-          COALESCE(SUM(((usage ->> 'estimatedCostUsd')::numeric)), 0)::float AS cost
-        FROM runs
-        WHERE created_at >= ${sinceIso}::timestamptz
-          ${projectId ? sql`AND project_id = ${projectId}::uuid` : sql``}
+          day,
+          SUM(runs)::int          AS runs,
+          SUM(completed)::int     AS completed,
+          SUM(failed)::int        AS failed,
+          SUM(input_tokens)::int  AS input_tokens,
+          SUM(output_tokens)::int AS output_tokens,
+          SUM(cost)::float        AS cost
+        FROM (
+          SELECT
+            to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+            COUNT(*)                                                        AS runs,
+            SUM((status = 'completed')::int)                               AS completed,
+            SUM((status IN ('failed','timeout','cancelled'))::int)          AS failed,
+            COALESCE(SUM((usage->>'inputTokens')::bigint),      0)         AS input_tokens,
+            COALESCE(SUM((usage->>'outputTokens')::bigint),     0)         AS output_tokens,
+            COALESCE(SUM((usage->>'estimatedCostUsd')::numeric), 0)        AS cost
+          FROM runs
+          WHERE created_at >= ${sinceIso}::timestamptz
+            ${projectId ? sql`AND project_id = ${projectId}::uuid` : sql``}
+          GROUP BY day
+
+          UNION ALL
+
+          SELECT
+            to_char(date_trunc('day', updated_at), 'YYYY-MM-DD') AS day,
+            0                                                              AS runs,
+            0                                                              AS completed,
+            0                                                              AS failed,
+            COALESCE(SUM((usage->>'inputTokens')::bigint),      0)        AS input_tokens,
+            COALESCE(SUM((usage->>'outputTokens')::bigint),     0)        AS output_tokens,
+            COALESCE(SUM((usage->>'estimatedCostUsd')::numeric), 0)       AS cost
+          FROM chat_sessions
+          WHERE updated_at >= ${sinceIso}::timestamptz
+            AND usage IS NOT NULL
+            ${projectId ? sql`AND project_id = ${projectId}::uuid` : sql``}
+          GROUP BY day
+        ) combined
         GROUP BY day
         ORDER BY day ASC
       `);
@@ -162,14 +189,36 @@ export function makeRunsRepo(db: Db) {
         cost: number;
       }>(sql`
         SELECT
-          COUNT(*)::int AS runs,
-          SUM((status = 'completed')::int)::int AS completed,
-          SUM((status IN ('failed','timeout','cancelled'))::int)::int AS failed,
-          COALESCE(SUM(((usage ->> 'inputTokens')::bigint))::int, 0) AS input_tokens,
-          COALESCE(SUM(((usage ->> 'outputTokens')::bigint))::int, 0) AS output_tokens,
-          COALESCE(SUM(((usage ->> 'estimatedCostUsd')::numeric)), 0)::float AS cost
-        FROM runs
-        ${projectId ? sql`WHERE project_id = ${projectId}::uuid` : sql``}
+          SUM(runs)::int          AS runs,
+          SUM(completed)::int     AS completed,
+          SUM(failed)::int        AS failed,
+          SUM(input_tokens)::int  AS input_tokens,
+          SUM(output_tokens)::int AS output_tokens,
+          SUM(cost)::float        AS cost
+        FROM (
+          SELECT
+            COUNT(*)                                                        AS runs,
+            SUM((status = 'completed')::int)                               AS completed,
+            SUM((status IN ('failed','timeout','cancelled'))::int)          AS failed,
+            COALESCE(SUM((usage->>'inputTokens')::bigint),      0)         AS input_tokens,
+            COALESCE(SUM((usage->>'outputTokens')::bigint),     0)         AS output_tokens,
+            COALESCE(SUM((usage->>'estimatedCostUsd')::numeric), 0)        AS cost
+          FROM runs
+          ${projectId ? sql`WHERE project_id = ${projectId}::uuid` : sql``}
+
+          UNION ALL
+
+          SELECT
+            0                                                              AS runs,
+            0                                                              AS completed,
+            0                                                              AS failed,
+            COALESCE(SUM((usage->>'inputTokens')::bigint),      0)        AS input_tokens,
+            COALESCE(SUM((usage->>'outputTokens')::bigint),     0)        AS output_tokens,
+            COALESCE(SUM((usage->>'estimatedCostUsd')::numeric), 0)       AS cost
+          FROM chat_sessions
+          WHERE usage IS NOT NULL
+          ${projectId ? sql`AND project_id = ${projectId}::uuid` : sql``}
+        ) combined
       `);
       const r = result[0];
       return {

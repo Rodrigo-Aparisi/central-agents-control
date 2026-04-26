@@ -1,5 +1,6 @@
+import type { RunUsage } from '@cac/shared';
 import { sql } from 'drizzle-orm';
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { projects } from './projects';
 
 export const chatSessions = pgTable(
@@ -10,6 +11,7 @@ export const chatSessions = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     title: text('title').notNull().default('Nueva conversación'),
+    usage: jsonb('usage').$type<RunUsage>(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .notNull()
       .default(sql`now()`),
