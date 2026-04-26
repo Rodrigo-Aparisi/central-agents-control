@@ -1,3 +1,4 @@
+import { Markdown } from '@/components/chat/markdown';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -759,10 +760,10 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
 }
 
 function AssistantContent({ content }: { content: string }) {
-  // Split on agent-definition blocks first, then generic code blocks
+  // Split on agent-definition blocks first; render those specially, rest via Markdown
   const parts = content.split(/(```agent-definition[\s\S]*?```)/);
   return (
-    <div className="space-y-2 text-sm text-foreground">
+    <div className="space-y-2">
       {parts.map((part, i) => {
         if (part.startsWith('```agent-definition')) {
           const inner = part.replace(/^```agent-definition\n?/, '').replace(/\n?```$/, '');
@@ -780,26 +781,8 @@ function AssistantContent({ content }: { content: string }) {
             </div>
           );
         }
-        // Render generic code fences and plain text
-        const subParts = part.split(/(```[\s\S]*?```)/);
-        return (
-          <div key={i} className="whitespace-pre-wrap break-words leading-relaxed">
-            {subParts.map((sp, j) => {
-              if (sp.startsWith('```')) {
-                const code = sp.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
-                return (
-                  <pre
-                    key={j}
-                    className="my-1.5 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs"
-                  >
-                    {code}
-                  </pre>
-                );
-              }
-              return <span key={j}>{sp}</span>;
-            })}
-          </div>
-        );
+        if (part.trim().length === 0) return null;
+        return <Markdown key={i} content={part} />;
       })}
     </div>
   );

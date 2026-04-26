@@ -9,13 +9,7 @@ export function Markdown({ content, className }: MarkdownProps) {
   const blocks = parseBlocks(content);
 
   return (
-    <div
-      className={cn(
-        'prose-chat text-sm leading-relaxed',
-        '[&>*+*]:mt-3',
-        className,
-      )}
-    >
+    <div className={cn('text-sm leading-relaxed [&>*+*]:mt-3', className)}>
       {blocks.map((block, i) => (
         <Block key={i} block={block} />
       ))}
@@ -31,6 +25,7 @@ type BlockNode =
   | { type: 'code'; lang: string; content: string }
   | { type: 'ul'; items: InlineNode[][] }
   | { type: 'ol'; items: InlineNode[][] }
+  | { type: 'table'; headers: InlineNode[][]; rows: InlineNode[][][] }
   | { type: 'hr' };
 
 type InlineNode =
@@ -39,6 +34,25 @@ type InlineNode =
   | { type: 'bold'; value: string }
   | { type: 'italic'; value: string }
   | { type: 'bold-italic'; value: string };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isTableRow(line: string): boolean {
+  return line.trim().startsWith('|') && line.trim().endsWith('|');
+}
+
+function isSeparatorRow(line: string): boolean {
+  return isTableRow(line) && /^\|[\s|:-]+\|$/.test(line.trim());
+}
+
+function parseTableCells(line: string): InlineNode[][] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => parseInline(cell.trim()));
+}
 
 // ─── Block parser ─────────────────────────────────────────────────────────────
 
@@ -83,6 +97,19 @@ function parseBlocks(src: string): BlockNode[] {
       continue;
     }
 
+    // Table — detect header row followed by separator row
+    if (isTableRow(line) && i + 1 < lines.length && isSeparatorRow(lines[i + 1]!)) {
+      const headers = parseTableCells(line);
+      i += 2; // skip header + separator
+      const rows: InlineNode[][][] = [];
+      while (i < lines.length && isTableRow(lines[i]!)) {
+        rows.push(parseTableCells(lines[i]!));
+        i++;
+      }
+      blocks.push({ type: 'table', headers, rows });
+      continue;
+    }
+
     // Unordered list
     if (/^[-*+]\s/.test(line)) {
       const items: InlineNode[][] = [];
@@ -120,7 +147,8 @@ function parseBlocks(src: string): BlockNode[] {
       !lines[i]!.startsWith('#') &&
       !/^[-*+]\s/.test(lines[i]!) &&
       !/^\d+\.\s/.test(lines[i]!) &&
-      !/^[-*_]{3,}$/.test(lines[i]!.trim())
+      !/^[-*_]{3,}$/.test(lines[i]!.trim()) &&
+      !(isTableRow(lines[i]!) && i + 1 < lines.length && isSeparatorRow(lines[i + 1]!))
     ) {
       paraLines.push(lines[i]!);
       i++;
@@ -137,8 +165,7 @@ function parseBlocks(src: string): BlockNode[] {
 
 function parseInline(src: string): InlineNode[] {
   const nodes: InlineNode[] = [];
-  // Patterns: bold-italic, bold, italic, inline-code
-  const pattern = /(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|_[^_]+_|\*[^*]+\*)/g;
+  const pattern = /(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|___[^_]+___|__[^_]+__|_[^_]+_|\*[^*]+\*)/g;
   let last = 0;
   let m: RegExpExecArray | null;
 
@@ -210,12 +237,14 @@ function Block({ block }: { block: BlockNode }) {
         </Tag>
       );
     }
+
     case 'paragraph':
       return (
         <p className="leading-relaxed">
           <Inline nodes={block.inline} />
         </p>
       );
+
     case 'code':
       return (
         <div className="overflow-hidden rounded-md border border-border">
@@ -229,9 +258,10 @@ function Block({ block }: { block: BlockNode }) {
           </pre>
         </div>
       );
+
     case 'ul':
       return (
-        <ul className="space-y-0.5 pl-4">
+        <ul className="space-y-0.5 pl-5">
           {block.items.map((item, i) => (
             <li key={i} className="list-disc">
               <Inline nodes={item} />
@@ -239,9 +269,10 @@ function Block({ block }: { block: BlockNode }) {
           ))}
         </ul>
       );
+
     case 'ol':
       return (
-        <ol className="space-y-0.5 pl-4">
+        <ol className="space-y-0.5 pl-5">
           {block.items.map((item, i) => (
             <li key={i} className="list-decimal">
               <Inline nodes={item} />
@@ -249,8 +280,44 @@ function Block({ block }: { block: BlockNode }) {
           ))}
         </ol>
       );
+
+    case 'table':
+      return (
+        <div className="w-full overflow-x-auto rounded-md border border-border">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border bg-muted/50">
+                {block.headers.map((cell, i) => (
+                  <th
+                    key={i}
+                    className="px-3 py-2 text-left font-semibold text-foreground"
+                  >
+                    <Inline nodes={cell} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, ri) => (
+                <tr
+                  key={ri}
+                  className="border-b border-border/50 last:border-0 odd:bg-muted/10 even:bg-transparent"
+                >
+                  {row.map((cell, ci) => (
+                    <td key={ci} className="px-3 py-2 text-muted-foreground">
+                      <Inline nodes={cell} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+
     case 'hr':
       return <hr className="border-border" />;
+
     default:
       return null;
   }

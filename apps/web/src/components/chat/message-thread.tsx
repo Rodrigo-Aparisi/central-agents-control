@@ -43,8 +43,8 @@ export function MessageThread({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4">
-      <div className="mx-auto max-w-3xl space-y-5">
+    <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="space-y-5">
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
@@ -53,7 +53,7 @@ export function MessageThread({
         {isStreaming && (
           <div className="flex gap-3">
             <AssistantAvatar />
-            <div className="flex-1 rounded-xl rounded-tl-none border border-border bg-card px-4 py-3">
+            <div className="flex-1 min-w-0 rounded-xl rounded-tl-none border border-border bg-card px-4 py-3">
               {streamingContent ? (
                 <Markdown content={streamingContent} />
               ) : (
@@ -76,7 +76,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] rounded-xl rounded-tr-none bg-[var(--color-chart-1)]/10 px-4 py-3 text-sm ring-1 ring-[var(--color-chart-1)]/20">
+        <div className="max-w-[85%] rounded-xl rounded-tr-none bg-[var(--color-chart-1)]/10 px-4 py-3 text-sm ring-1 ring-[var(--color-chart-1)]/20">
           <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
         </div>
       </div>
@@ -86,7 +86,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div className="flex gap-3">
       <AssistantAvatar />
-      <div className="flex-1 rounded-xl rounded-tl-none border border-border bg-card px-4 py-3">
+      <div className="flex-1 min-w-0 rounded-xl rounded-tl-none border border-border bg-card px-4 py-3">
         <Markdown content={message.content} />
       </div>
     </div>
