@@ -272,6 +272,7 @@ export const api = {
       sessionId: string,
       input: SendChatMessageInput,
       onChunk: (text: string) => void,
+      onLaunchedRuns?: (runs: Array<{ id: string; prompt: string }>) => void,
       signal?: AbortSignal,
     ): Promise<void> => {
       const token = useAuthStore.getState().accessToken;
@@ -317,9 +318,11 @@ export const api = {
               text?: string;
               done?: boolean;
               error?: string;
+              launchedRuns?: Array<{ id: string; prompt: string }>;
             };
             if (data.error) throw new ApiError(500, { code: 'INTERNAL' as const, message: data.error });
             if (data.text) onChunk(data.text);
+            if (data.launchedRuns && onLaunchedRuns) onLaunchedRuns(data.launchedRuns);
           } catch (e) {
             if (e instanceof ApiError) throw e;
           }

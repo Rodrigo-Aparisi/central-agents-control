@@ -78,6 +78,9 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
         activeSessionId,
         { content },
         (chunk) => setStreamingContent((prev) => prev + chunk),
+        () => {
+          qc.invalidateQueries({ queryKey: qk.projectRuns(projectId) });
+        },
         abortRef.current.signal,
       );
       // Reload messages to get persisted assistant message + real IDs

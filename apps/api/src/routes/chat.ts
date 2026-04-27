@@ -12,6 +12,8 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { startRunner } from '@cac/claude-runner';
 
+const RUN_BLOCK_RE = /```run\r?\n([\s\S]+?)```/g;
+
 const CHAT_TIMEOUT_MS = 120_000;
 
 function toApiSession(
@@ -174,9 +176,24 @@ export const chatRoutes = fp(
           'claude-sonnet-4-6';
 
         const systemPrompt = `You are a helpful assistant for the project "${project.name}" located at ${project.rootPath}.
-Help the developer think through decisions, iterate on concepts, and discuss project-related topics.
+Help the developer think through decisions, iterate on concepts, discuss topics, and execute tasks on the project.
 Be concise but thorough. Format code with markdown code blocks.
-IMPORTANT: Respond ONLY with plain text/markdown. Do NOT use any tools (Bash, Read, Write, etc.).`;
+IMPORTANT: Respond ONLY with plain text/markdown. Do NOT use any tools (Bash, Read, Write, etc.).
+
+## Launching runs
+When the user asks you to execute, implement, run, or create something in the project, you can launch a run directly.
+Include a run block with the exact prompt for Claude Code to execute autonomously:
+
+\`\`\`run
+<detailed prompt for Claude Code to execute — be specific about what to implement, modify, or create>
+\`\`\`
+
+Rules for run blocks:
+- Only use for tasks that require file changes, code execution, or autonomous work
+- Write the prompt as if instructing Claude Code directly — be explicit and complete
+- You can include multiple run blocks for independent tasks
+- For pure questions, analysis, or brainstorming, do NOT use run blocks — just respond in prose
+- After the run block, briefly explain what the run will do`;
 
         let prompt: string;
         if (history.length === 0) {
@@ -225,17 +242,60 @@ IMPORTANT: Respond ONLY with plain text/markdown. Do NOT use any tools (Bash, Re
           const result = await handle.result;
 
           if (result.reason === 'completed' && assistantContent.length > 0) {
-            // Persist assistant response + token usage
+            // Detect and launch any run blocks in the response
+            let finalContent = assistantContent;
+            const runMatches = [...assistantContent.matchAll(RUN_BLOCK_RE)];
+            const launchedRuns: Array<{ id: string; prompt: string }> = [];
+
+            for (const match of runMatches) {
+              const runPrompt = match[1]!.trim();
+              if (!runPrompt) continue;
+              try {
+                const run = await fastify.db.runs.insert({
+                  projectId: req.params.id,
+                  status: 'queued',
+                  prompt: runPrompt,
+                  params: { flags: [], model, timeoutMs: fastify.config.RUN_TIMEOUT_MS },
+                  usage: null,
+                  exitCode: null,
+                  durationMs: null,
+                  error: null,
+                  startedAt: null,
+                  finishedAt: null,
+                });
+                await fastify.queues.runs.add(
+                  'run',
+                  { runId: run.id, projectId: req.params.id },
+                  { jobId: run.id },
+                );
+                req.log.info({ runId: run.id }, 'run launched from chat');
+                const short = runPrompt.slice(0, 200);
+                launchedRuns.push({ id: run.id, prompt: short });
+                // Replace ```run block with ```run-launched block containing the run ID
+                finalContent = finalContent.replace(
+                  match[0]!,
+                  `\`\`\`run-launched\n${JSON.stringify({ id: run.id, prompt: short })}\n\`\`\``,
+                );
+              } catch (err) {
+                req.log.error({ err }, 'failed to launch run from chat');
+              }
+            }
+
+            // Persist assistant response (with run-launched replacements) + token usage
             const assistantSeq = nextSeq + 1;
             await Promise.all([
               fastify.db.chatMessages.insert({
                 sessionId: req.params.sessionId,
                 role: 'assistant',
-                content: assistantContent,
+                content: finalContent,
                 seq: assistantSeq,
               }),
               fastify.db.chatSessions.addUsage(req.params.sessionId, result.usage),
             ]);
+
+            if (launchedRuns.length > 0) {
+              reply.raw.write(`data: ${JSON.stringify({ launchedRuns })}\n\n`);
+            }
             reply.raw.write('data: {"done":true}\n\n');
           } else if (result.reason !== 'completed') {
             const msg = result.error?.message ?? result.reason;
@@ -251,5 +311,5 @@ IMPORTANT: Respond ONLY with plain text/markdown. Do NOT use any tools (Bash, Re
       },
     );
   },
-  { name: 'routes:chat', dependencies: ['db', 'config'] },
+  { name: 'routes:chat', dependencies: ['db', 'config', 'queues'] },
 );

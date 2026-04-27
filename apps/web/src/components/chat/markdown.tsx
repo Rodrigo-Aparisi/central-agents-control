@@ -26,7 +26,9 @@ type BlockNode =
   | { type: 'ul'; items: InlineNode[][] }
   | { type: 'ol'; items: InlineNode[][] }
   | { type: 'table'; headers: InlineNode[][]; rows: InlineNode[][][] }
-  | { type: 'hr' };
+  | { type: 'hr' }
+  | { type: 'run'; prompt: string }
+  | { type: 'run-launched'; id: string; prompt: string };
 
 type InlineNode =
   | { type: 'text'; value: string }
@@ -74,7 +76,23 @@ function parseBlocks(src: string): BlockNode[] {
         i++;
       }
       i++; // consume closing ```
-      blocks.push({ type: 'code', lang, content: content.join('\n') });
+      const raw = content.join('\n');
+
+      if (lang === 'run') {
+        blocks.push({ type: 'run', prompt: raw.trim() });
+        continue;
+      }
+      if (lang === 'run-launched') {
+        try {
+          const parsed = JSON.parse(raw.trim()) as { id: string; prompt: string };
+          blocks.push({ type: 'run-launched', id: parsed.id, prompt: parsed.prompt });
+        } catch {
+          blocks.push({ type: 'code', lang, content: raw });
+        }
+        continue;
+      }
+
+      blocks.push({ type: 'code', lang, content: raw });
       continue;
     }
 
@@ -317,6 +335,32 @@ function Block({ block }: { block: BlockNode }) {
 
     case 'hr':
       return <hr className="border-border" />;
+
+    case 'run':
+      return (
+        <div className="flex items-start gap-3 rounded-lg border border-dashed border-[var(--color-chart-2)]/40 bg-[var(--color-chart-2)]/5 px-4 py-3">
+          <span className="mt-0.5 text-[var(--color-chart-2)]" aria-hidden="true">▶</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[var(--color-chart-2)]">Lanzando run…</p>
+            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{block.prompt}</p>
+          </div>
+        </div>
+      );
+
+    case 'run-launched':
+      return (
+        <a
+          href={`/runs/${block.id}`}
+          className="flex items-start gap-3 rounded-lg border border-[var(--color-chart-2)]/30 bg-[var(--color-chart-2)]/8 px-4 py-3 no-underline transition-colors hover:bg-[var(--color-chart-2)]/12"
+        >
+          <span className="mt-0.5 text-[var(--color-chart-2)]" aria-hidden="true">✓</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[var(--color-chart-2)]">Run lanzado</p>
+            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{block.prompt}</p>
+          </div>
+          <span className="shrink-0 text-[10px] text-muted-foreground">→ ver run</span>
+        </a>
+      );
 
     default:
       return null;
